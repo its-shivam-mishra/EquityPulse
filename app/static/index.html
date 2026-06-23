@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EquityPulse - Indian Stock Portfolio Analyser</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <i class="fa-solid fa-chart-line pulse-logo"></i>
+                <h2>EquityPulse</h2>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="dashboard-view" id="nav-dashboard">
+                    <i class="fa-solid fa-wallet"></i>
+                    <span>My Portfolio</span>
+                </button>
+                <button class="nav-item" data-target="add-view" id="nav-add">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>Add / Update Stock</span>
+                </button>
+                <button class="nav-item" data-target="upload-view" id="nav-upload">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <span>Import Excel</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="exchange-tag">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>NSE & BSE Market Only</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Portfolio Summary Badges -->
+            <header class="top-header">
+                <div class="header-title-wrapper">
+                    <h1>Portfolio Overview</h1>
+                    <p class="subtitle">Live tracking, Simple Moving Averages, and performance analysis</p>
+                </div>
+                <div class="portfolio-summary">
+                    <div class="summary-card investment">
+                        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <div class="card-info">
+                            <span class="label">Total Invested</span>
+                            <span class="value" id="total-investment">₹0.00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card current-value">
+                        <div class="card-icon"><i class="fa-solid fa-vault"></i></div>
+                        <div class="card-info">
+                            <span class="label">Current Value</span>
+                            <span class="value" id="total-current-value">₹0.00</span>
+                        </div>
+                    </div>
+                    <div class="summary-card return-rate">
+                        <div class="card-icon" id="return-icon-wrapper"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                        <div class="card-info">
+                            <span class="label">Total Return</span>
+                            <span class="value" id="total-return">₹0.00</span>
+                            <span class="percentage" id="total-return-pct">(0.00%)</span>
+                        </div>
+                    </div>
+                    <div class="summary-card today-return">
+                        <div class="card-icon" id="today-return-icon-wrapper"><i class="fa-solid fa-calendar-day"></i></div>
+                        <div class="card-info">
+                            <span class="label">Today's Return</span>
+                            <span class="value" id="today-return-val">₹0.00</span>
+                            <span class="percentage" id="today-return-pct">(0.00%)</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic Views Container -->
+            <section class="view-container">
+                
+                <!-- VIEW 1: DASHBOARD / STOCKS TABLE -->
+                <div id="dashboard-view" class="app-view active">
+                    <div class="card table-card">
+                        <div class="table-header">
+                            <h3>Stock Holdings</h3>
+                            <button class="btn btn-secondary btn-icon" id="refresh-stocks">
+                                <i class="fa-solid fa-arrows-rotate"></i> Refresh Rates
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="stock-table" id="stock-list-table">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center col-seq">#</th>
+                                        <th>Stock Name</th>
+                                        <th class="text-right">Qty</th>
+                                        <th class="text-right">Buy Price</th>
+                                        <th class="text-right">Current Price</th>
+                                        <th class="text-right">Investment</th>
+                                        <th class="text-right">Current Value</th>
+                                        <th class="text-right">Today's Return</th>
+                                        <th class="text-right">Gain / Loss</th>
+                                        <th class="text-center">SMA Status (20/100/200)</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stock-table-body">
+                                    <!-- Dynamic rows inserted here -->
+                                    <tr class="placeholder-row">
+                                        <td colspan="10" class="text-center">
+                                            <div class="loading-spinner-wrapper">
+                                                <div class="spinner"></div>
+                                                <p>Fetching portfolio data...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: ADD / UPDATE STOCK FORM -->
+                <div id="add-view" class="app-view">
+                    <div class="card form-card">
+                        <div class="card-header">
+                            <h3>Add or Update Transaction</h3>
+                            <p class="hint-text">If the stock symbol already exists, its quantity will increase, and the buying price will update to a weighted average.</p>
+                        </div>
+                        <form id="stock-form" class="form-grid">
+                            <div class="form-group">
+                                <label for="stock-symbol">Stock Symbol <span class="required">*</span></label>
+                                <div class="input-with-hint">
+                                    <input type="text" id="stock-symbol" placeholder="e.g. RELIANCE, INFIBEAM.BO, TCS" required>
+                                    <small class="form-hint">Default is NSE (.NS). Standard NSE symbol: e.g. <strong>TCS</strong>, <strong>RELIANCE</strong>. For BSE, append <strong>.BO</strong> (e.g. <strong>BOMDYEING.BO</strong>).</small>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="stock-price">Buying Price (₹) <span class="required">*</span></label>
+                                <input type="number" id="stock-price" step="0.01" min="0.01" placeholder="Buying price per share" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="stock-qty">Quantity <span class="required">*</span></label>
+                                <input type="number" id="stock-qty" step="1" min="1" placeholder="Number of shares" required>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary" id="btn-submit-stock">
+                                    <i class="fa-solid fa-save"></i> Save Holding
+                                </button>
+                                <button type="reset" class="btn btn-tertiary">
+                                    Reset Form
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: UPLOAD EXCEL FILE -->
+                <div id="upload-view" class="app-view">
+                    <div class="card upload-card">
+                        <div class="card-header">
+                            <h3>Excel Portfolio Import</h3>
+                            <p class="hint-text">Upload an Excel sheet to bulk merge holdings. Duplicate stock entries will merge automatically by recalculating average buying price.</p>
+                        </div>
+                        <div class="upload-area" id="dropzone">
+                            <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                            <h4>Drag & Drop your Excel file here</h4>
+                            <p>or</p>
+                            <label for="excel-file-input" class="btn btn-secondary">
+                                <i class="fa-solid fa-folder-open"></i> Browse Files
+                            </label>
+                            <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display: none;">
+                            <span class="file-format-info">Supported formats: .xlsx, .xls</span>
+                        </div>
+                        <div class="excel-format-guide">
+                            <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
+                            <p>Your Excel file should contain a sheet with at least these three columns (headers can be case-insensitive):</p>
+                            <div class="columns-badge-container">
+                                <span class="badge">Stock Name</span>
+                                <span class="badge">Buying Price</span>
+                                <span class="badge">Quantity</span>
+                            </div>
+                        </div>
+                        <!-- Upload results modal / box -->
+                        <div class="upload-result-box hidden" id="upload-result">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 4: STOCK DETAILS & SMA ANALYSIS -->
+                <div id="details-view" class="app-view">
+                    <div class="details-grid">
+                        <!-- Left Panel: Chart & Ticker Overview -->
+                        <div class="card detail-chart-card">
+                            <div class="detail-header">
+                                <div class="ticker-identity">
+                                    <button class="btn btn-link btn-back" id="btn-back-dashboard">
+                                        <i class="fa-solid fa-arrow-left"></i> Back to Portfolio
+                                    </button>
+                                    <h2 id="detail-symbol">RELIANCE.NS</h2>
+                                    <span class="company-name-placeholder" id="detail-exchange">NSE (India)</span>
+                                </div>
+                                <div class="chart-timeframes">
+                                    <button class="time-btn" data-period="1mo">1M</button>
+                                    <button class="time-btn" data-period="3mo">3M</button>
+                                    <button class="time-btn" data-period="6mo">6M</button>
+                                    <button class="time-btn active" data-period="1y">1Y</button>
+                                </div>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="stockHistoryChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Moving Averages Details -->
+                        <div class="card sma-card">
+                            <h3>Simple Moving Averages (SMA)</h3>
+                            <p class="subtitle">SMA indicators help spot trends. Trading above moving averages typically signals positive momentum.</p>
+                            
+                            <div class="sma-metrics-list">
+                                <!-- SMA 20 -->
+                                <div class="sma-item-row" id="sma-20-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot dot-20"></span>
+                                        <div>
+                                            <h4>20-Day SMA</h4>
+                                            <small>Short-term momentum</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col">
+                                        <span class="value" id="sma20-val">₹0.00</span>
+                                        <span class="status-indicator" id="sma20-indicator">Above</span>
+                                    </div>
+                                </div>
+
+                                <!-- SMA 100 -->
+                                <div class="sma-item-row" id="sma-100-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot dot-100"></span>
+                                        <div>
+                                            <h4>100-Day SMA</h4>
+                                            <small>Medium-term trend</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col">
+                                        <span class="value" id="sma100-val">₹0.00</span>
+                                        <span class="status-indicator" id="sma100-indicator">Above</span>
+                                    </div>
+                                </div>
+
+                                <!-- SMA 200 -->
+                                <div class="sma-item-row" id="sma-200-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot dot-200"></span>
+                                        <div>
+                                            <h4>200-Day SMA</h4>
+                                            <small>Long-term support/resistance</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col">
+                                        <span class="value" id="sma200-val">₹0.00</span>
+                                        <span class="status-indicator" id="sma200-indicator">Above</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="sma-technical-summary card-subtext" id="sma-summary-verdict">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast System -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- App JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>

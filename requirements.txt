@@ -1,0 +1,10 @@
+fastapi>=0.100.0
+uvicorn>=0.22.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+yfinance>=0.2.20
+python-multipart>=0.0.6
+pydantic>=2.0.0
+reportlab>=4.0.0
+azure-communication-email>=1.0.0
+python-dotenv>=1.0.0
