@@ -1,0 +1,99 @@
+trigger:
+- main
+
+variables:
+  pythonVersion: '3.11'
+  vmImageName: 'ubuntu-latest'
+
+  # Azure Service Connection Name
+  azureSubscription: 'PayYouGo(2)(01cfc6ee-b2aa-463b-98e6-99d09998413b)'
+
+  # Azure Web App Name
+  webAppName: '2AppEquityPulse'
+
+stages:
+
+# ==========================
+# BUILD STAGE
+# ==========================
+- stage: Build
+  displayName: Build
+
+  jobs:
+  - job: BuildJob
+
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+
+    - task: UsePythonVersion@0
+      displayName: 'Use Python $(pythonVersion)'
+      inputs:
+        versionSpec: '$(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+      displayName: 'Install dependencies'
+
+    - task: ArchiveFiles@2
+      displayName: 'Create deployment package'
+      inputs:
+        rootFolderOrFile: '$(Build.SourcesDirectory)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/EquityPulse.zip'
+        replaceExistingArchive: true
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/EquityPulse.zip'
+        artifact: 'drop'
+
+# ==========================
+# DEPLOY STAGE
+# ==========================
+- stage: Deploy
+  displayName: Deploy
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - deployment: DeployWebApp
+
+    environment: 'WebAppEquityPulse'
+
+    pool:
+      vmImage: $(vmImageName)
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - download: current
+            artifact: drop
+
+          - task: AzureRmWebAppDeployment@5
+            displayName: 'Deploy to Azure Web App'
+
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: '$(azureSubscription)'
+
+              appType: 'webAppLinux'
+
+              WebAppName: '$(webAppName)'
+
+              packageForLinux: '$(Pipeline.Workspace)/drop/EquityPulse.zip'
+
+              RuntimeStack: 'PYTHON|3.11'
+
+              DeploymentTypeLinux: 'oneDeploy'
+
+              StartupCommand: 'uvicorn app.main:app --host 0.0.0.0 --port 8000'
