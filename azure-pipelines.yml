@@ -78,9 +78,15 @@ stages:
               versionSpec: '$(pythonVersion)'
             displayName: 'Use Python version'
 
-          - task: AzureWebApp@1
-            displayName: 'Deploy Azure Web App : 2AppEquityPulse'
+
+
+          - task: AzureRmWebAppDeployment@5
             inputs:
-              azureSubscription: $(azureServiceConnectionId)
-              appName: $(webAppName)
-              package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'PayYouGo(2)(01cfc6ee-b2aa-463b-98e6-99d09998413b)'
+              appType: 'webAppLinux'
+              WebAppName: '2AppEquityPulse'
+              packageForLinux: '$(System.DefaultWorkingDirectory)/**/*.zip'
+              RuntimeStack: 'PYTHON|3.11'
+              StartupCommand: 'uvicorn app.main:app --host 0.0.0.0 --port 8000'
+              DeploymentTypeLinux: 'oneDeploy'
