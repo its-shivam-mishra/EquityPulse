@@ -79,7 +79,7 @@ stages:
             displayName: 'Use Python version'
 
           - task: AzureWebApp@1
-            displayName: 'Deploy Azure Web App : WebAppEquityPulse'
+            displayName: 'Deploy Azure Web App : 2AppEquityPulse'
             inputs:
               azureSubscription: $(azureServiceConnectionId)
               appName: $(webAppName)
