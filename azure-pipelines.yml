@@ -4,11 +4,7 @@ trigger:
 variables:
   pythonVersion: '3.11'
   vmImageName: 'ubuntu-latest'
-
-  # Azure Service Connection Name
   azureSubscription: 'PayYouGo(2)(01cfc6ee-b2aa-463b-98e6-99d09998413b)'
-
-  # Azure Web App Name
   webAppName: '2AppEquityPulse'
 
 stages:
@@ -21,24 +17,17 @@ stages:
 
   jobs:
   - job: BuildJob
-
     pool:
       vmImage: $(vmImageName)
 
     steps:
-
     - task: UsePythonVersion@0
       displayName: 'Use Python $(pythonVersion)'
       inputs:
         versionSpec: '$(pythonVersion)'
 
-    - script: |
-        python -m pip install --upgrade pip
-
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        fi
-      displayName: 'Install dependencies'
+    # We skip pip install here because SCM_DO_BUILD_DURING_DEPLOYMENT 
+    # tells Azure to build the app on its end.
 
     - task: ArchiveFiles@2
       displayName: 'Create deployment package'
@@ -65,9 +54,7 @@ stages:
 
   jobs:
   - deployment: DeployWebApp
-
     environment: 'WebAppEquityPulse'
-
     pool:
       vmImage: $(vmImageName)
 
@@ -75,25 +62,18 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - download: current
             artifact: drop
 
           - task: AzureRmWebAppDeployment@5
             displayName: 'Deploy to Azure Web App'
-
             inputs:
               ConnectionType: 'AzureRM'
               azureSubscription: '$(azureSubscription)'
-
               appType: 'webAppLinux'
-
               WebAppName: '$(webAppName)'
-
               packageForLinux: '$(Pipeline.Workspace)/drop/EquityPulse.zip'
-
               RuntimeStack: 'PYTHON|3.11'
-
               DeploymentTypeLinux: 'oneDeploy'
-
-              StartupCommand: 'uvicorn app.main:app --host 0.0.0.0 --port 8000'
+              # Using gunicorn as process manager for production
+              StartupCommand: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000'
