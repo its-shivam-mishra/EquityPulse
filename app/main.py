@@ -49,6 +49,7 @@ class StockTransaction(BaseModel):
 class StockUpdateData(BaseModel):
     price: float = Field(..., gt=0, description="New average buying price per share")
     quantity: float = Field(..., gt=0, description="New quantity of shares")
+    new_symbol: Optional[str] = Field(None, description="Optional new symbol to rename to")
 
 # API Endpoints
 @app.get("/api/stocks")
@@ -118,7 +119,7 @@ def get_history(symbol: str, period: str = "1y"):
 def update_stock_transaction(symbol: str, data: StockUpdateData):
     """Directly update price and quantity of a stock in the Excel sheet."""
     try:
-        result = update_stock(symbol, data.price, data.quantity)
+        result = update_stock(symbol, data.price, data.quantity, data.new_symbol)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))

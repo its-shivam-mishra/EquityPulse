@@ -16,7 +16,31 @@ load_dotenv()
 # Workspace asset path configuration
 ASSETS_DIR = Path("assets")
 EXCEL_PATH = ASSETS_DIR / "stocks.xlsx"
+COMPANY_NAME_CACHE_FILE = ASSETS_DIR / "company_names.json"
 COLUMNS = ["Stock Name", "Buying Price", "Quantity"]
+
+def get_company_name(ticker_obj, symbol: str) -> str:
+    import json
+    cache = {}
+    if COMPANY_NAME_CACHE_FILE.exists():
+        try:
+            with open(COMPANY_NAME_CACHE_FILE, "r") as f:
+                cache = json.load(f)
+        except Exception:
+            pass
+            
+    if symbol in cache:
+        return cache[symbol]
+        
+    try:
+        # Avoid blocking significantly if possible, but info is a property that makes a request
+        name = ticker_obj.info.get('longName') or ticker_obj.info.get('shortName') or symbol
+        cache[symbol] = name
+        with open(COMPANY_NAME_CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+        return name
+    except Exception:
+        return symbol
 
 def ensure_excel_file():
     """Ensure assets folder and Excel file exist with correct structure."""
@@ -80,7 +104,7 @@ def write_stocks(df: pd.DataFrame):
 # NSE trade-segment suffixes that Yahoo Finance does not recognise.
 # These are administrative markers (Trade-to-Trade, suspended, SME, etc.)
 # and must be stripped from the base ticker before querying yfinance.
-_NSE_SEGMENT_MARKERS = _re.compile(r'-(?:T|X|BE|N|SM)$', _re.IGNORECASE)
+_NSE_SEGMENT_MARKERS = _re.compile(r'-(?:T|X|BE|N|SM|ST)$', _re.IGNORECASE)
 
 def format_symbol(symbol: str) -> str:
     """Format symbol to ensure it is NSE/BSE compatible with yfinance.
@@ -186,7 +210,9 @@ def get_stock_data(symbol: str):
         today_change = 0.0
         today_change_pct = 0.0
 
-    return current_price, sma20, sma50, sma100, sma200, formatted_symbol, today_change, today_change_pct
+    company_name = get_company_name(ticker, formatted_symbol)
+
+    return current_price, sma20, sma50, sma100, sma200, formatted_symbol, today_change, today_change_pct, company_name
 
 def get_stock_history(symbol: str, period: str = "1y"):
     """
@@ -265,7 +291,7 @@ def get_all_stocks_with_metrics() -> list:
         quantity = float(row["Quantity"])
         
         try:
-            current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct = get_stock_data(symbol)
+            current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct, company_name = get_stock_data(symbol)
             investment_value = buying_price * quantity
             current_value = current_price * quantity
             gain_loss = current_value - investment_value
@@ -276,6 +302,7 @@ def get_all_stocks_with_metrics() -> list:
                 return None if (isinstance(val, float) and math.isnan(val)) else val
 
             results.append({
+                "company_name": company_name,
                 "symbol": actual_symbol,
                 "buying_price": clean_nan(buying_price),
                 "quantity": clean_nan(quantity),
@@ -297,6 +324,7 @@ def get_all_stocks_with_metrics() -> list:
         except Exception as e:
             # Fallback in case a ticker fetch fails, return it with error details
             results.append({
+                "company_name": symbol,
                 "symbol": symbol,
                 "buying_price": buying_price,
                 "quantity": quantity,
@@ -370,8 +398,8 @@ def add_stock(symbol: str, price: float, quantity: float) -> dict:
     write_stocks(df)
     return {"symbol": symbol_upper, "action": action}
 
-def update_stock(symbol: str, price: float, quantity: float) -> dict:
-    """Directly update price and quantity of a stock (overwriting previous values)."""
+def update_stock(symbol: str, price: float, quantity: float, new_symbol: str = None) -> dict:
+    """Directly update price and quantity of a stock (and optionally its symbol)."""
     # First, validate symbol format
     formatted_symbol = format_symbol(symbol)
     df = read_stocks()
@@ -398,6 +426,10 @@ def update_stock(symbol: str, price: float, quantity: float) -> dict:
         
     df.loc[match_idx, "Buying Price"] = price
     df.loc[match_idx, "Quantity"] = quantity
+    
+    if new_symbol:
+        formatted_new_symbol = format_symbol(new_symbol)
+        df.loc[match_idx, "Stock Name"] = formatted_new_symbol.upper()
     
     write_stocks(df)
     return {"symbol": df.loc[match_idx, "Stock Name"], "action": "updated"}

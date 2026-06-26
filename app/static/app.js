@@ -78,8 +78,26 @@ function switchView(viewId) {
 }
 
 /* 2. Portfolio Calculations and Dashboard Loading */
+let _currentStocksData = [];
+let _currentSortColumn = null;
+let _currentSortDirection = "asc";
+
 function initStocks() {
     fetchAndRenderStocks();
+    
+    // Table Sorting
+    document.querySelectorAll("th.sortable").forEach(th => {
+        th.addEventListener("click", () => {
+            const column = th.dataset.sort;
+            if (_currentSortColumn === column) {
+                _currentSortDirection = _currentSortDirection === "asc" ? "desc" : "asc";
+            } else {
+                _currentSortColumn = column;
+                _currentSortDirection = "asc";
+            }
+            applyCurrentSortAndRender();
+        });
+    });
     
     // Refresh button
     const refreshBtn = document.getElementById("refresh-stocks");
@@ -99,7 +117,8 @@ async function fetchAndRenderStocks() {
         if (!response.ok) throw new Error("Could not retrieve stocks data.");
         
         const stocks = await response.json();
-        renderStocksTable(stocks);
+        _currentStocksData = stocks;
+        applyCurrentSortAndRender();
         updateSummaryHeader(stocks);
     } catch (error) {
         console.error(error);
@@ -112,6 +131,42 @@ async function fetchAndRenderStocks() {
         `;
         showToast("Error loading portfolio: " + error.message, "error");
     }
+}
+
+function applyCurrentSortAndRender() {
+    let data = [..._currentStocksData];
+    if (_currentSortColumn) {
+        data.sort((a, b) => {
+            let valA = a[_currentSortColumn];
+            let valB = b[_currentSortColumn];
+
+            // If missing fields, fallbacks
+            if (valA === undefined || valA === null) valA = "";
+            if (valB === undefined || valB === null) valB = "";
+
+            if (typeof valA === "string") valA = valA.toLowerCase();
+            if (typeof valB === "string") valB = valB.toLowerCase();
+
+            if (valA < valB) return _currentSortDirection === "asc" ? -1 : 1;
+            if (valA > valB) return _currentSortDirection === "asc" ? 1 : -1;
+            return 0;
+        });
+    }
+    renderStocksTable(data);
+    updateSortIcons();
+}
+
+function updateSortIcons() {
+    document.querySelectorAll("th.sortable").forEach(th => {
+        const icon = th.querySelector("i");
+        if (th.dataset.sort === _currentSortColumn) {
+            icon.className = _currentSortDirection === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+            th.classList.add("active-sort");
+        } else {
+            icon.className = "fa-solid fa-sort";
+            th.classList.remove("active-sort");
+        }
+    });
 }
 
 function renderStocksTable(stocks) {
@@ -200,11 +255,30 @@ function renderStocksTable(stocks) {
             });
         }
         
+        const baseSymbol = stock.symbol.replace('.NS', '').replace('.BO', '');
+        const tvExchange = stock.symbol.endsWith(".BO") ? "BSE" : "NSE";
+        const tvUrl = `https://in.tradingview.com/chart/F2GnnF04/?symbol=${tvExchange}%3A${baseSymbol}`;
+        const screenerUrl = `https://www.screener.in/company/${baseSymbol}/`;
+
+        const displayTitle = stock.company_name || stock.symbol;
         row.innerHTML = `
             <td class="text-center seq-num">${index + 1}</td>
             <td>
                 <div class="ticker-cell">
-                    <span class="symbol-text">${stock.symbol}</span>
+                    <div class="symbol-title-row">
+                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-value="${stock.symbol}" data-company-name="${displayTitle}" title="Click to edit symbol (Current: ${stock.symbol})">
+                            <span class="symbol-text editable-display">${displayTitle}</span>
+                            <i class="fa-solid fa-pen-to-square edit-pencil"></i>
+                        </div>
+                        <div class="stock-icons">
+                            <a href="${tvUrl}" target="_blank" class="external-link" title="TradingView">
+                                <img src="https://in.tradingview.com/favicon.ico" alt="TV" class="external-icon">
+                            </a>
+                            <a href="${screenerUrl}" target="_blank" class="external-link" title="Screener">
+                                <img src="https://www.screener.in/favicon.ico" alt="Scr" class="external-icon">
+                            </a>
+                        </div>
+                    </div>
                     <span class="exchange-text">${stock.symbol.endsWith(".BO") ? "BSE India" : stock.symbol.endsWith(".NS") ? "NSE India" : "Global / US"}</span>
                 </div>
             </td>
@@ -240,7 +314,7 @@ function renderStocksTable(stocks) {
         // Row redirection to detail panel
         row.addEventListener("click", (e) => {
             // Prevent navigating if user clicked the delete button or an editable cell
-            if (e.target.closest(".btn-delete-stock") || e.target.closest(".editable-cell")) {
+            if (e.target.closest(".btn-delete-stock") || e.target.closest(".editable-cell") || e.target.closest(".external-link")) {
                 return;
             }
             openStockDetails(stock.symbol);
@@ -380,18 +454,22 @@ function activateInlineEdit(cell) {
 
     if (cell.classList.contains("editing")) return; // already active
 
-    const field = cell.dataset.field;         // 'quantity' | 'price'
+    const field = cell.dataset.field;         // 'quantity' | 'price' | 'symbol'
     const symbol = cell.dataset.symbol;
-    const rawValue = parseFloat(cell.dataset.value);
+    const isSymbol = field === "symbol";
+    const rawValue = isSymbol ? cell.dataset.value : parseFloat(cell.dataset.value);
 
     // Build the inline input element
     const isQty = field === "quantity";
     const input = document.createElement("input");
-    input.type = "number";
+    input.type = isSymbol ? "text" : "number";
     input.className = "inline-edit-input";
-    input.value = isQty ? rawValue : rawValue.toFixed(4);
-    input.step = isQty ? "1" : "0.01";
-    input.min = isQty ? "1" : "0.01";
+    input.value = isSymbol ? rawValue : (isQty ? rawValue : rawValue.toFixed(4));
+    
+    if (!isSymbol) {
+        input.step = isQty ? "1" : "0.01";
+        input.min = isQty ? "1" : "0.01";
+    }
     input.setAttribute("data-original", input.value);
 
     // Save button
@@ -410,6 +488,7 @@ function activateInlineEdit(cell) {
     cell.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "inline-edit-wrapper";
+    if (isSymbol) wrapper.classList.add("symbol-edit");
     wrapper.appendChild(input);
     wrapper.appendChild(saveBtn);
     wrapper.appendChild(cancelBtn);
@@ -434,11 +513,19 @@ function activateInlineEdit(cell) {
 function cancelInlineEdit(cell) {
     if (!cell.classList.contains("editing")) return;
     const field = cell.dataset.field;
-    const rawValue = parseFloat(cell.dataset.value);
+    const isSymbol = field === "symbol";
     const isQty = field === "quantity";
+    
+    let displayHtml = "";
+    if (isSymbol) {
+        displayHtml = `<span class="symbol-text editable-display">${cell.dataset.companyName || cell.dataset.value}</span>`;
+    } else {
+        const rawValue = parseFloat(cell.dataset.value);
+        displayHtml = `<span class="editable-display">${isQty ? rawValue : "\u20B9" + rawValue.toFixed(2)}</span>`;
+    }
 
     cell.classList.remove("editing");
-    cell.innerHTML = `<span class="editable-display">${isQty ? rawValue : "\u20B9" + rawValue.toFixed(2)}</span><i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
+    cell.innerHTML = `${displayHtml}<i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
     _activeEditCell = null;
 }
 
@@ -446,21 +533,37 @@ async function commitInlineEdit(cell, symbol) {
     if (!cell.classList.contains("editing")) return;
 
     const field = cell.dataset.field;
+    const isSymbol = field === "symbol";
     const isQty = field === "quantity";
     const input = cell.querySelector(".inline-edit-input");
-    const newValue = parseFloat(input.value);
-
-    if (isNaN(newValue) || newValue <= 0) {
-        input.classList.add("input-error");
-        showToast("Please enter a valid positive number.", "error");
-        input.focus();
-        return;
-    }
-
-    const original = parseFloat(input.dataset.original);
-    if (newValue === original) {
-        cancelInlineEdit(cell);
-        return;
+    
+    let newValue;
+    if (isSymbol) {
+        newValue = input.value.trim().toUpperCase();
+        if (!newValue) {
+            input.classList.add("input-error");
+            showToast("Symbol cannot be empty.", "error");
+            input.focus();
+            return;
+        }
+        const original = input.dataset.original;
+        if (newValue === original) {
+            cancelInlineEdit(cell);
+            return;
+        }
+    } else {
+        newValue = parseFloat(input.value);
+        if (isNaN(newValue) || newValue <= 0) {
+            input.classList.add("input-error");
+            showToast("Please enter a valid positive number.", "error");
+            input.focus();
+            return;
+        }
+        const original = parseFloat(input.dataset.original);
+        if (newValue === original) {
+            cancelInlineEdit(cell);
+            return;
+        }
     }
 
     // Get the sibling cell values so we can send both price + qty to the PUT endpoint
@@ -468,8 +571,18 @@ async function commitInlineEdit(cell, symbol) {
     const qtyCell  = row.querySelector(".editable-cell[data-field='quantity']");
     const priceCell = row.querySelector(".editable-cell[data-field='price']");
 
-    const currentQty   = isQty ? newValue : parseFloat(qtyCell.dataset.value);
-    const currentPrice = isQty ? parseFloat(priceCell.dataset.value) : newValue;
+    let currentQty = parseFloat(qtyCell.dataset.value);
+    let currentPrice = parseFloat(priceCell.dataset.value);
+    
+    if (!isSymbol) {
+        if (isQty) currentQty = newValue;
+        else currentPrice = newValue;
+    }
+
+    const requestBody = { price: currentPrice, quantity: currentQty };
+    if (isSymbol) {
+        requestBody.new_symbol = newValue;
+    }
 
     // Show saving state
     const saveBtn = cell.querySelector(".inline-edit-btn.save");
@@ -479,7 +592,7 @@ async function commitInlineEdit(cell, symbol) {
         const response = await fetch(`/api/stocks/${encodeURIComponent(symbol)}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ price: currentPrice, quantity: currentQty })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -489,19 +602,29 @@ async function commitInlineEdit(cell, symbol) {
 
         // Update the data-value attribute so future edits use the new value
         cell.dataset.value = newValue.toString();
+        if (isSymbol) cell.dataset.symbol = newValue; // Also update symbol reference if symbol changed
+        
         cell.classList.remove("editing");
         _activeEditCell = null;
 
         // Update display text inline without full table refresh
-        const displayVal = isQty ? newValue : `\u20B9${newValue.toFixed(2)}`;
-        cell.innerHTML = `<span class="editable-display">${displayVal}</span><i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
+        let displayHtml = "";
+        if (isSymbol) {
+            displayHtml = `<span class="symbol-text editable-display">${newValue}</span>`;
+            // Also need to trigger full refresh as other links rely on symbol
+        } else {
+            const displayVal = isQty ? newValue : `\u20B9${newValue.toFixed(2)}`;
+            displayHtml = `<span class="editable-display">${displayVal}</span>`;
+        }
+        
+        cell.innerHTML = `${displayHtml}<i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
 
         // Re-wire the click event on the updated cell
         cell.addEventListener("click", (e) => { e.stopPropagation(); activateInlineEdit(cell); });
 
-        showToast(`${symbol} ${isQty ? "quantity" : "buy price"} updated!`, "success");
+        showToast(`${isSymbol ? "Symbol" : (isQty ? "quantity" : "buy price")} updated!`, "success");
 
-        // Full refresh so calculated columns (Investment, Gain/Loss, etc.) update
+        // Full refresh so calculated columns and new links update
         fetchAndRenderStocks();
 
     } catch (error) {

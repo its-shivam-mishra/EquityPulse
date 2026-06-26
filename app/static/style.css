@@ -401,6 +401,41 @@ body {
     flex-direction: column;
 }
 
+.symbol-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stock-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.stock-table tbody tr:hover .stock-icons {
+    opacity: 1;
+}
+
+.external-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.external-link:hover {
+    transform: scale(1.15);
+}
+
+.external-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+}
+
 .ticker-cell .symbol-text {
     font-family: var(--font-heading);
     font-weight: 700;
@@ -1192,6 +1227,33 @@ body {
     background: var(--danger);
     color: #fff;
     transform: scale(1.1);
+}
+
+/* ─── Sorting Styles ──────────────────────────────────────────────────── */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+th.sortable:hover {
+    color: var(--accent);
+}
+th.sortable i {
+    margin-left: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.8em;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s;
+}
+th.sortable:hover i {
+    opacity: 0.8;
+}
+th.sortable.active-sort {
+    color: var(--accent);
+}
+th.sortable.active-sort i {
+    color: var(--accent);
+    opacity: 1;
 }
 
 /* ─── Responsive styles ──────────────────────────────────────────────────── */
