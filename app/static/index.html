@@ -56,15 +56,15 @@
                     <div class="summary-card investment">
                         <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
                         <div class="card-info">
-                            <span class="label">Total Invested</span>
-                            <span class="value" id="total-investment">₹0.00</span>
+                            <span class="label" style="display: flex; align-items: center;">Total Invested <i class="fa-solid fa-eye-slash" id="toggle-mask-icon" title="Toggle visibility" style="cursor: pointer; margin-left: 8px; font-size: 1.1em; opacity: 0.8; transition: opacity 0.2s;"></i></span>
+                            <span class="value" id="total-investment">₹******</span>
                         </div>
                     </div>
                     <div class="summary-card current-value">
                         <div class="card-icon"><i class="fa-solid fa-vault"></i></div>
                         <div class="card-info">
                             <span class="label">Current Value</span>
-                            <span class="value" id="total-current-value">₹0.00</span>
+                            <span class="value" id="total-current-value">₹******</span>
                         </div>
                     </div>
                     <div class="summary-card return-rate">
@@ -94,9 +94,22 @@
                     <div class="card table-card">
                         <div class="table-header">
                             <h3>Stock Holdings</h3>
-                            <button class="btn btn-secondary btn-icon" id="refresh-stocks">
-                                <i class="fa-solid fa-arrows-rotate"></i> Refresh Rates
-                            </button>
+                            <div style="display: flex; gap: 10px;">
+                                <div class="view-options-wrapper" style="position: relative;">
+                                    <button class="btn btn-secondary btn-icon" id="btn-view-options">
+                                        <i class="fa-solid fa-list-check"></i> Columns
+                                    </button>
+                                    <div id="column-dropdown" class="dropdown-menu hidden" style="position: absolute; right: 0; top: 110%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; width: 220px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                                        <h4 style="margin-bottom: 0.75rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-main);">Show / Hide Columns</h4>
+                                        <div class="column-toggles" id="column-toggles-list" style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem; color: var(--text-main);">
+                                            <!-- Dynamically populated -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary btn-icon" id="refresh-stocks">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Refresh Rates
+                                </button>
+                            </div>
                         </div>
                         <div class="table-responsive">
                             <table class="stock-table" id="stock-list-table">
@@ -111,7 +124,7 @@
                                         <th class="text-right sortable" data-sort="current_value">Current Value <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="today_return_val">Today's Return <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="gain_loss">Gain / Loss <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-center">SMA Status (20/100/200)</th>
+                                        <th class="text-center">SMA Status (20/50/100/200)</th>
                                         <th class="text-center">Actions</th>
                                     </tr>
                                 </thead>
@@ -245,6 +258,21 @@
                                     </div>
                                 </div>
 
+                                <!-- SMA 50 -->
+                                <div class="sma-item-row" id="sma-50-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot dot-50" style="background: #2dd4bf; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span>
+                                        <div>
+                                            <h4>50-Day SMA</h4>
+                                            <small>Short/Medium trend</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col">
+                                        <span class="value" id="sma50-val">₹0.00</span>
+                                        <span class="status-indicator" id="sma50-indicator">Above</span>
+                                    </div>
+                                </div>
+
                                 <!-- SMA 100 -->
                                 <div class="sma-item-row" id="sma-100-card">
                                     <div class="sma-label-col">
@@ -274,11 +302,51 @@
                                         <span class="status-indicator" id="sma200-indicator">Above</span>
                                     </div>
                                 </div>
+
+                                <!-- RSI -->
+                                <div class="sma-item-row" id="rsi-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot" style="background: var(--warning);"></span>
+                                        <div>
+                                            <h4>14-Day RSI</h4>
+                                            <small>Momentum indicator</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col">
+                                        <span class="value" id="rsi-val">0.00</span>
+                                        <span class="status-indicator" id="rsi-indicator">Neutral</span>
+                                    </div>
+                                </div>
+
+                                <!-- Bollinger Bands Breakout -->
+                                <div class="sma-item-row" id="bb-card">
+                                    <div class="sma-label-col">
+                                        <span class="dot" style="background: var(--secondary);"></span>
+                                        <div>
+                                            <h4>Bollinger Bands</h4>
+                                            <small>Volatility & Breakouts</small>
+                                        </div>
+                                    </div>
+                                    <div class="sma-value-col" style="flex-direction: column; align-items: flex-end; gap: 0.3rem;">
+                                        <span class="value" id="bb-val" style="font-size: 0.9rem;">-</span>
+                                        <span class="status-indicator" id="bb-indicator">Inside Range</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="sma-technical-summary card-subtext" id="sma-summary-verdict">
                                 <!-- Populated by JS -->
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- News Section -->
+                    <div class="card news-card" style="margin-top: 1.5rem;">
+                        <div class="card-header">
+                            <h3>Latest Technical & Stock News</h3>
+                        </div>
+                        <div class="news-list" id="stock-news-list">
+                            <p class="text-muted">Loading latest news...</p>
                         </div>
                     </div>
                 </div>

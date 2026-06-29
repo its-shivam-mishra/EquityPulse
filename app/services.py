@@ -248,6 +248,33 @@ def get_stock_history(symbol: str, period: str = "1y"):
     hist["SMA_100"] = hist["Close"].rolling(window=100).mean()
     hist["SMA_200"] = hist["Close"].rolling(window=200).mean()
     
+    # Calculate Bollinger Bands
+    std_20 = hist["Close"].rolling(window=20).std()
+    hist["BB_Upper"] = hist["SMA_20"] + (std_20 * 2)
+    hist["BB_Lower"] = hist["SMA_20"] - (std_20 * 2)
+    
+    # Calculate RSI (14-period)
+    delta = hist["Close"].diff()
+    gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+    rs = gain / loss
+    hist["RSI"] = 100 - (100 / (1 + rs))
+    
+    # Extract Latest News
+    news_data = []
+    try:
+        raw_news = ticker.news
+        if raw_news:
+            for item in raw_news[:4]:  # Top 4 news items
+                news_data.append({
+                    "title": item.get("content", {}).get("title", "No Title"),
+                    "link": item.get("content", {}).get("clickThroughUrl", {}).get("url", "#"),
+                    "publisher": item.get("content", {}).get("provider", {}).get("displayName", "Unknown"),
+                    "time": item.get("content", {}).get("pubDate", "")
+                })
+    except Exception:
+        pass
+    
     # Reset index to get Date
     hist = hist.reset_index()
     
@@ -262,21 +289,24 @@ def get_stock_history(symbol: str, period: str = "1y"):
     sma50_list = hist["SMA_50"].bfill().tolist()
     sma100_list = hist["SMA_100"].bfill().tolist()
     sma200_list = hist["SMA_200"].bfill().tolist()
+    bb_upper_list = hist["BB_Upper"].bfill().tolist()
+    bb_lower_list = hist["BB_Lower"].bfill().tolist()
+    rsi_list = hist["RSI"].bfill().tolist()
     
-    # Convert nan to None for JSON compliance
-    closes = [None if math.isnan(x) else x for x in closes]
-    sma20_list = [None if math.isnan(x) else x for x in sma20_list]
-    sma50_list = [None if math.isnan(x) else x for x in sma50_list]
-    sma100_list = [None if math.isnan(x) else x for x in sma100_list]
-    sma200_list = [None if math.isnan(x) else x for x in sma200_list]
+    def sanitize(lst):
+        return [None if (isinstance(x, float) and math.isnan(x)) else x for x in lst]
 
     return {
         "dates": dates,
-        "prices": closes,
-        "sma20": sma20_list,
-        "sma50": sma50_list,
-        "sma100": sma100_list,
-        "sma200": sma200_list,
+        "prices": sanitize(closes),
+        "sma20": sanitize(sma20_list),
+        "sma50": sanitize(sma50_list),
+        "sma100": sanitize(sma100_list),
+        "sma200": sanitize(sma200_list),
+        "bb_upper": sanitize(bb_upper_list),
+        "bb_lower": sanitize(bb_lower_list),
+        "rsi": sanitize(rsi_list),
+        "news": news_data,
         "symbol": formatted_symbol
     }
 

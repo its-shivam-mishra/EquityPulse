@@ -2,6 +2,8 @@
 let currentSymbol = null;
 let currentPeriod = "1y";
 let historyChartInstance = null;
+let isValuesMasked = true;
+let hiddenColumns = new Set([5, 6, 8]); // Default hide Investment and Current Value columns
 
 // Initialize when DOM is fully loaded
 document.addEventListener("DOMContentLoaded", () => {
@@ -10,25 +12,127 @@ document.addEventListener("DOMContentLoaded", () => {
     initForms();
     initUpload();
     initDetails();
+    initMaskToggle();
+    initColumnVisibility();
 });
+
+function initMaskToggle() {
+    const icon = document.getElementById("toggle-mask-icon");
+    if (icon) {
+        icon.addEventListener("click", () => {
+            isValuesMasked = !isValuesMasked;
+            icon.className = isValuesMasked ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+
+            if (_currentStocksData && _currentStocksData.length > 0) {
+                updateSummaryHeader(_currentStocksData);
+            } else {
+                document.getElementById("total-investment").textContent = isValuesMasked ? "₹******" : "₹0.00";
+                document.getElementById("total-current-value").textContent = isValuesMasked ? "₹******" : "₹0.00";
+            }
+        });
+    }
+}
+
+function initColumnVisibility() {
+    const btn = document.getElementById("btn-view-options");
+    const dropdown = document.getElementById("column-dropdown");
+    const list = document.getElementById("column-toggles-list");
+
+    if (!btn || !dropdown || !list) return;
+
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (e) => {
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+            dropdown.classList.add("hidden");
+        }
+    });
+
+    const headers = document.querySelectorAll("#stock-list-table th");
+    headers.forEach((th, index) => {
+        if (index === 0 || index === 1 || index === 10) return;
+
+        let label = th.textContent.replace("SMA Status (20/50/100/200)", "SMA Status").trim();
+
+        const div = document.createElement("div");
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.gap = "8px";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = !hiddenColumns.has(index);
+        checkbox.dataset.colIndex = index;
+        checkbox.style.cursor = "pointer";
+
+        const span = document.createElement("label");
+        span.textContent = label;
+        span.style.cursor = "pointer";
+        span.addEventListener("click", () => checkbox.click());
+
+        checkbox.addEventListener("change", (e) => {
+            if (e.target.checked) {
+                hiddenColumns.delete(index);
+            } else {
+                hiddenColumns.add(index);
+            }
+            applyColumnVisibility();
+        });
+
+        div.appendChild(checkbox);
+        div.appendChild(span);
+        list.appendChild(div);
+    });
+}
+
+function applyColumnVisibility() {
+    const table = document.getElementById("stock-list-table");
+    if (!table) return;
+
+    const headers = table.querySelectorAll("thead tr th");
+    headers.forEach((th, index) => {
+        if (hiddenColumns.has(index)) {
+            th.style.display = "none";
+        } else {
+            th.style.display = "";
+        }
+    });
+
+    const rows = table.querySelectorAll("tbody tr");
+    rows.forEach(row => {
+        const cells = row.children;
+        if (cells.length === 1 && cells[0].hasAttribute("colspan")) return;
+
+        for (let i = 0; i < cells.length; i++) {
+            if (hiddenColumns.has(i)) {
+                cells[i].style.display = "none";
+            } else {
+                cells[i].style.display = "";
+            }
+        }
+    });
+}
 
 /* Toast Notification Utility */
 function showToast(message, type = "info") {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    
+
     let iconClass = "fa-circle-info";
     if (type === "success") iconClass = "fa-circle-check";
     if (type === "error") iconClass = "fa-triangle-exclamation";
-    
+
     toast.innerHTML = `
         <i class="fa-solid ${iconClass}"></i>
         <span>${message}</span>
     `;
-    
+
     container.appendChild(toast);
-    
+
     // Automatically remove toast after 4 seconds
     setTimeout(() => {
         toast.style.opacity = "0";
@@ -41,7 +145,7 @@ function showToast(message, type = "info") {
 function initNavigation() {
     const navItems = document.querySelectorAll(".nav-item");
     const views = document.querySelectorAll(".app-view");
-    
+
     navItems.forEach(item => {
         item.addEventListener("click", () => {
             const targetId = item.getAttribute("data-target");
@@ -70,7 +174,7 @@ function switchView(viewId) {
             view.classList.remove("active");
         }
     });
-    
+
     // Auto-reload stock table when returning to dashboard
     if (viewId === "dashboard-view") {
         fetchAndRenderStocks();
@@ -84,7 +188,7 @@ let _currentSortDirection = "asc";
 
 function initStocks() {
     fetchAndRenderStocks();
-    
+
     // Table Sorting
     document.querySelectorAll("th.sortable").forEach(th => {
         th.addEventListener("click", () => {
@@ -98,7 +202,7 @@ function initStocks() {
             applyCurrentSortAndRender();
         });
     });
-    
+
     // Refresh button
     const refreshBtn = document.getElementById("refresh-stocks");
     if (refreshBtn) {
@@ -111,11 +215,11 @@ function initStocks() {
 
 async function fetchAndRenderStocks() {
     const tableBody = document.getElementById("stock-table-body");
-    
+
     try {
         const response = await fetch("/api/stocks");
         if (!response.ok) throw new Error("Could not retrieve stocks data.");
-        
+
         const stocks = await response.json();
         _currentStocksData = stocks;
         applyCurrentSortAndRender();
@@ -171,7 +275,7 @@ function updateSortIcons() {
 
 function renderStocksTable(stocks) {
     const tableBody = document.getElementById("stock-table-body");
-    
+
     if (stocks.length === 0) {
         tableBody.innerHTML = `
             <tr>
@@ -183,20 +287,20 @@ function renderStocksTable(stocks) {
         `;
         return;
     }
-    
+
     tableBody.innerHTML = "";
-    
+
     stocks.forEach((stock, index) => {
         const row = document.createElement("tr");
         row.setAttribute("data-symbol", stock.symbol);
-        
+
         // Formatted cells
         const buyPrice = stock.buying_price;
         const qty = stock.quantity;
         const currentPrice = stock.current_price;
-        
+
         const isError = stock.status === "error";
-        
+
         let currentPriceText = "—";
         let currentValText = "—";
         let gainLossText = "—";
@@ -205,16 +309,16 @@ function renderStocksTable(stocks) {
         let todayReturnText = "—";
         let todayReturnPctText = "";
         let todayReturnClass = "";
-        
+
         if (!isError && currentPrice !== null) {
             currentPriceText = `₹${currentPrice.toFixed(2)}`;
             currentValText = `₹${stock.current_value.toFixed(2)}`;
-            
+
             const gl = stock.gain_loss;
             const glPct = stock.gain_loss_pct;
             gainLossClass = gl >= 0 ? "gain-val" : "loss-val";
             const sign = gl >= 0 ? "+" : "";
-            
+
             gainLossText = `${sign}₹${gl.toFixed(2)}`;
             gainLossPctText = `(${sign}${glPct.toFixed(2)}%)`;
 
@@ -229,17 +333,18 @@ function renderStocksTable(stocks) {
         } else if (isError) {
             currentPriceText = `<span class="loss-val" title="${stock.error}"><i class="fa-solid fa-circle-exclamation"></i> Failed</span>`;
         }
-        
+
         const investValText = `₹${(buyPrice * qty).toFixed(2)}`;
-        
+
         // SMA status badges
         let smaBadges = "";
         const smaIndicators = [
             { name: "20", val: stock.sma20 },
+            { name: "50", val: stock.sma50 },
             { name: "100", val: stock.sma100 },
             { name: "200", val: stock.sma200 }
         ];
-        
+
         if (isError || currentPrice === null) {
             smaBadges = `<span class="tag na">N/A</span>`;
         } else {
@@ -254,10 +359,10 @@ function renderStocksTable(stocks) {
                 }
             });
         }
-        
+
         const baseSymbol = stock.symbol.replace('.NS', '').replace('.BO', '');
         const tvExchange = stock.symbol.endsWith(".BO") ? "BSE" : "NSE";
-        const tvUrl = `https://in.tradingview.com/chart/F2GnnF04/?symbol=${tvExchange}%3A${baseSymbol}`;
+        const tvUrl = `https://in.tradingview.com/chart/?symbol=${tvExchange}%3A${baseSymbol}`;
         const screenerUrl = `https://www.screener.in/company/${baseSymbol}/`;
 
         const displayTitle = stock.company_name || stock.symbol;
@@ -310,7 +415,7 @@ function renderStocksTable(stocks) {
                 </button>
             </td>
         `;
-        
+
         // Row redirection to detail panel
         row.addEventListener("click", (e) => {
             // Prevent navigating if user clicked the delete button or an editable cell
@@ -327,10 +432,10 @@ function renderStocksTable(stocks) {
                 activateInlineEdit(cell);
             });
         });
-        
+
         tableBody.appendChild(row);
     });
-    
+
     // Register delete event handlers
     const deleteBtns = tableBody.querySelectorAll(".btn-delete-stock");
     deleteBtns.forEach(btn => {
@@ -342,6 +447,8 @@ function renderStocksTable(stocks) {
             }
         });
     });
+
+    applyColumnVisibility();
 }
 
 function updateSummaryHeader(stocks) {
@@ -349,11 +456,11 @@ function updateSummaryHeader(stocks) {
     let totalCurrent = 0;
     let successfulFetches = 0;
     let totalTodayReturn = 0;
-    
+
     stocks.forEach(stock => {
         const investVal = stock.buying_price * stock.quantity;
         totalInvested += investVal;
-        
+
         if (stock.status === "success" && stock.current_value !== null) {
             totalCurrent += stock.current_value;
             successfulFetches++;
@@ -365,35 +472,35 @@ function updateSummaryHeader(stocks) {
             totalCurrent += investVal;
         }
     });
-    
+
     const totalReturn = totalCurrent - totalInvested;
     const totalReturnPct = totalInvested > 0 ? (totalReturn / totalInvested * 100) : 0.0;
     const prevTotalCurrent = totalCurrent - totalTodayReturn;
     const todayReturnPct = prevTotalCurrent > 0 ? (totalTodayReturn / prevTotalCurrent * 100) : 0.0;
-    
-    document.getElementById("total-investment").textContent = `₹${totalInvested.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    document.getElementById("total-current-value").textContent = `₹${totalCurrent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    
+
+    document.getElementById("total-investment").textContent = isValuesMasked ? "₹******" : `₹${totalInvested.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    document.getElementById("total-current-value").textContent = isValuesMasked ? "₹******" : `₹${totalCurrent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
     // Total Return Formatting
     const returnValEl = document.getElementById("total-return");
     const returnPctEl = document.getElementById("total-return-pct");
     const returnIconWrapper = document.getElementById("return-icon-wrapper");
     const sign = totalReturn >= 0 ? "+" : "-";
-    
+
     returnValEl.textContent = `${sign}₹${Math.abs(totalReturn).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     returnPctEl.textContent = `(${totalReturn >= 0 ? '+' : ''}${totalReturnPct.toFixed(2)}%)`;
-    
+
     // Today's Return Formatting
     const todayReturnValEl = document.getElementById("today-return-val");
     const todayReturnPctEl = document.getElementById("today-return-pct");
     const todayReturnIconWrapper = document.getElementById("today-return-icon-wrapper");
     const todaySign = totalTodayReturn >= 0 ? "+" : "-";
-    
+
     if (todayReturnValEl) {
         todayReturnValEl.textContent = `${todaySign}₹${Math.abs(totalTodayReturn).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         todayReturnPctEl.textContent = `(${totalTodayReturn >= 0 ? '+' : ''}${todayReturnPct.toFixed(2)}%)`;
     }
-    
+
     // Adjust colors for Total Return
     if (totalReturn >= 0) {
         returnValEl.className = "value gain-val";
@@ -428,12 +535,12 @@ async function deleteStockHolding(symbol) {
         const response = await fetch(`/api/stocks/${symbol}`, {
             method: "DELETE"
         });
-        
+
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail || "Failed to delete stock");
         }
-        
+
         showToast(`Successfully deleted ${symbol}`, "success");
         fetchAndRenderStocks();
     } catch (error) {
@@ -465,7 +572,7 @@ function activateInlineEdit(cell) {
     input.type = isSymbol ? "text" : "number";
     input.className = "inline-edit-input";
     input.value = isSymbol ? rawValue : (isQty ? rawValue : rawValue.toFixed(4));
-    
+
     if (!isSymbol) {
         input.step = isQty ? "1" : "0.01";
         input.min = isQty ? "1" : "0.01";
@@ -515,7 +622,7 @@ function cancelInlineEdit(cell) {
     const field = cell.dataset.field;
     const isSymbol = field === "symbol";
     const isQty = field === "quantity";
-    
+
     let displayHtml = "";
     if (isSymbol) {
         displayHtml = `<span class="symbol-text editable-display">${cell.dataset.companyName || cell.dataset.value}</span>`;
@@ -536,7 +643,7 @@ async function commitInlineEdit(cell, symbol) {
     const isSymbol = field === "symbol";
     const isQty = field === "quantity";
     const input = cell.querySelector(".inline-edit-input");
-    
+
     let newValue;
     if (isSymbol) {
         newValue = input.value.trim().toUpperCase();
@@ -568,12 +675,12 @@ async function commitInlineEdit(cell, symbol) {
 
     // Get the sibling cell values so we can send both price + qty to the PUT endpoint
     const row = cell.closest("tr");
-    const qtyCell  = row.querySelector(".editable-cell[data-field='quantity']");
+    const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
     const priceCell = row.querySelector(".editable-cell[data-field='price']");
 
     let currentQty = parseFloat(qtyCell.dataset.value);
     let currentPrice = parseFloat(priceCell.dataset.value);
-    
+
     if (!isSymbol) {
         if (isQty) currentQty = newValue;
         else currentPrice = newValue;
@@ -603,7 +710,7 @@ async function commitInlineEdit(cell, symbol) {
         // Update the data-value attribute so future edits use the new value
         cell.dataset.value = newValue.toString();
         if (isSymbol) cell.dataset.symbol = newValue; // Also update symbol reference if symbol changed
-        
+
         cell.classList.remove("editing");
         _activeEditCell = null;
 
@@ -616,7 +723,7 @@ async function commitInlineEdit(cell, symbol) {
             const displayVal = isQty ? newValue : `\u20B9${newValue.toFixed(2)}`;
             displayHtml = `<span class="editable-display">${displayVal}</span>`;
         }
-        
+
         cell.innerHTML = `${displayHtml}<i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
 
         // Re-wire the click event on the updated cell
@@ -644,19 +751,19 @@ document.addEventListener("click", (e) => {
 function initForms() {
     const form = document.getElementById("stock-form");
     if (!form) return;
-    
+
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        
+
         const symbol = document.getElementById("stock-symbol").value.trim();
         const price = parseFloat(document.getElementById("stock-price").value);
         const qty = parseFloat(document.getElementById("stock-qty").value);
-        
+
         const submitBtn = document.getElementById("btn-submit-stock");
         const originalBtnHTML = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></div> Saving...';
-        
+
         try {
             const response = await fetch("/api/stocks", {
                 method: "POST",
@@ -665,19 +772,19 @@ function initForms() {
                 },
                 body: JSON.stringify({ symbol, price, quantity: qty })
             });
-            
+
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.detail || "Failed to save stock holding.");
             }
-            
+
             const result = await response.json();
-            const actionText = result.action === "merged" 
-                ? "merged (increased quantity & average price updated)" 
+            const actionText = result.action === "merged"
+                ? "merged (increased quantity & average price updated)"
                 : "added as a new holding";
-            
+
             showToast(`Stock ${result.symbol} successfully ${actionText}!`, "success");
-            
+
             form.reset();
             switchView("dashboard-view");
         } catch (error) {
@@ -694,12 +801,12 @@ function initUpload() {
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("excel-file-input");
     const resultBox = document.getElementById("upload-result");
-    
+
     if (!dropzone) return;
-    
+
     // Open file browser on dropzone click
     dropzone.addEventListener("click", () => fileInput.click());
-    
+
     // Visual indicators on dragover
     ["dragenter", "dragover"].forEach(eventName => {
         dropzone.addEventListener(eventName, (e) => {
@@ -707,14 +814,14 @@ function initUpload() {
             dropzone.classList.add("dragover");
         }, false);
     });
-    
+
     ["dragleave", "drop"].forEach(eventName => {
         dropzone.addEventListener(eventName, (e) => {
             e.preventDefault();
             dropzone.classList.remove("dragover");
         }, false);
     });
-    
+
     // Catch files dropped
     dropzone.addEventListener("drop", (e) => {
         const dt = e.dataTransfer;
@@ -723,7 +830,7 @@ function initUpload() {
             handleFileUpload(files[0]);
         }
     });
-    
+
     // Catch files selected from browser
     fileInput.addEventListener("change", (e) => {
         if (fileInput.files.length) {
@@ -734,30 +841,30 @@ function initUpload() {
 
 async function handleFileUpload(file) {
     const resultBox = document.getElementById("upload-result");
-    
+
     if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
         showToast("Invalid file format. Please upload an Excel sheet (.xlsx, .xls).", "error");
         return;
     }
-    
+
     const formData = new FormData();
     formData.append("file", file);
-    
+
     showToast(`Uploading ${file.name}...`, "info");
-    
+
     try {
         const response = await fetch("/api/stocks/upload", {
             method: "POST",
             body: formData
         });
-        
+
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail || "Upload error");
         }
-        
+
         const stats = await response.json();
-        
+
         // Populate results template
         let skippedHTML = "";
         if (stats.skipped > 0 && stats.skipped_details.length > 0) {
@@ -770,7 +877,7 @@ async function handleFileUpload(file) {
                 </div>
             `;
         }
-        
+
         resultBox.innerHTML = `
             <h4><i class="fa-solid fa-circle-check"></i> File Imported Successfully</h4>
             <div class="upload-stats-summary">
@@ -789,11 +896,11 @@ async function handleFileUpload(file) {
             </div>
             ${skippedHTML}
         `;
-        
+
         resultBox.classList.remove("hidden");
         showToast("Excel spreadsheet merged successfully!", "success");
         fetchAndRenderStocks();
-        
+
     } catch (error) {
         showToast("Failed to parse Excel: " + error.message, "error");
         resultBox.innerHTML = `
@@ -813,14 +920,14 @@ function initDetails() {
             switchView("dashboard-view");
         });
     }
-    
+
     // Timeframe selector triggers
     const timeBtns = document.querySelectorAll(".time-btn");
     timeBtns.forEach(btn => {
         btn.addEventListener("click", () => {
             timeBtns.forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
-            
+
             currentPeriod = btn.getAttribute("data-period");
             if (currentSymbol) {
                 loadHistoryChart(currentSymbol, currentPeriod);
@@ -831,15 +938,15 @@ function initDetails() {
 
 function openStockDetails(symbol) {
     currentSymbol = symbol;
-    
+
     // Set headers text
     document.getElementById("detail-symbol").textContent = symbol;
-    document.getElementById("detail-exchange").textContent = symbol.endsWith(".BO") 
-        ? "BSE India Listed" 
+    document.getElementById("detail-exchange").textContent = symbol.endsWith(".BO")
+        ? "BSE India Listed"
         : symbol.endsWith(".NS")
-        ? "NSE India Listed"
-        : "Global / US Market";
-        
+            ? "NSE India Listed"
+            : "Global / US Market";
+
     // Reset time selector back to 1 Year default
     const timeBtns = document.querySelectorAll(".time-btn");
     timeBtns.forEach(btn => {
@@ -850,7 +957,7 @@ function openStockDetails(symbol) {
         }
     });
     currentPeriod = "1y";
-    
+
     switchView("details-view");
     loadHistoryChart(symbol, currentPeriod);
 }
@@ -858,25 +965,28 @@ function openStockDetails(symbol) {
 async function loadHistoryChart(symbol, period) {
     const canvas = document.getElementById("stockHistoryChart");
     if (!canvas) return;
-    
+
     // Show spinner in details block or toast
     showToast(`Loading analysis chart for ${symbol}...`, "info");
-    
+
     try {
         const response = await fetch(`/api/stocks/${symbol}/history?period=${period}`);
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail || "Failed to fetch historical indicators.");
         }
-        
+
         const data = await response.json();
-        
+
         // Process UI values for moving averages card
         updateSMACards(data);
-        
+
+        // Render News
+        renderNews(data.news);
+
         // Draw the Chart
         renderChart(data);
-        
+
     } catch (error) {
         showToast("Error loading chart: " + error.message, "error");
         console.error(error);
@@ -886,9 +996,10 @@ async function loadHistoryChart(symbol, period) {
 function updateSMACards(data) {
     const lastPrice = data.prices[data.prices.length - 1];
     const lastSMA20 = data.sma20[data.sma20.length - 1];
+    const lastSMA50 = data.sma50[data.sma50.length - 1];
     const lastSMA100 = data.sma100[data.sma100.length - 1];
     const lastSMA200 = data.sma200[data.sma200.length - 1];
-    
+
     // Elements update helper
     const setSMAInfo = (smaName, smaVal, indicatorEl, valueEl) => {
         if (smaVal === null) {
@@ -902,47 +1013,134 @@ function updateSMACards(data) {
             indicatorEl.className = `status-indicator ${isAbove ? "above" : "below"}`;
         }
     };
-    
+
     setSMAInfo("20", lastSMA20, document.getElementById("sma20-indicator"), document.getElementById("sma20-val"));
+    setSMAInfo("50", lastSMA50, document.getElementById("sma50-indicator"), document.getElementById("sma50-val"));
     setSMAInfo("100", lastSMA100, document.getElementById("sma100-indicator"), document.getElementById("sma100-val"));
     setSMAInfo("200", lastSMA200, document.getElementById("sma200-indicator"), document.getElementById("sma200-val"));
-    
+
     // Verdict calculation
     let verdict = "";
     const name = data.symbol;
-    
-    if (lastSMA20 !== null && lastSMA100 !== null && lastSMA200 !== null) {
+
+    if (lastSMA20 !== null && lastSMA50 !== null && lastSMA100 !== null && lastSMA200 !== null) {
         const above20 = lastPrice >= lastSMA20;
+        const above50 = lastPrice >= lastSMA50;
         const above100 = lastPrice >= lastSMA100;
         const above200 = lastPrice >= lastSMA200;
-        
-        if (above20 && above100 && above200) {
-            verdict = `<i class="fa-solid fa-circle-check" style="color:var(--success);"></i> <strong>Strong Bullish Trend:</strong> The current market price of ${name} is trading above its 20-day, 100-day, and 200-day Simple Moving Averages. This indicates high positive long-term momentum.`;
-        } else if (!above20 && !above100 && !above200) {
-            verdict = `<i class="fa-solid fa-circle-exclamation" style="color:var(--danger);"></i> <strong>Strong Bearish Trend:</strong> The current market price is trading below its 20-day, 100-day, and 200-day Simple Moving Averages. This indicates a downward trend. Caution is advised.`;
+
+        if (above20 && above50 && above100 && above200) {
+            verdict = `<i class="fa-solid fa-circle-check" style="color:var(--success);"></i> <strong>Strong Bullish Trend:</strong> The current market price of ${name} is trading above its 20-day, 50-day, 100-day, and 200-day Simple Moving Averages. This indicates high positive long-term momentum.`;
+        } else if (!above20 && !above50 && !above100 && !above200) {
+            verdict = `<i class="fa-solid fa-circle-xmark" style="color:var(--danger);"></i> <strong>Bearish Trend:</strong> The current market price of ${name} is trading below its 20-day, 50-day, 100-day, and 200-day Simple Moving Averages. This indicates strong negative momentum.`;
         } else {
             let aboves = [];
             if (above20) aboves.push("20-Day");
+            if (above50) aboves.push("50-Day");
             if (above100) aboves.push("100-Day");
             if (above200) aboves.push("200-Day");
-            
+
             verdict = `<i class="fa-solid fa-circle-half-stroke" style="color:var(--warning);"></i> <strong>Neutral/Consolidating:</strong> The stock is in a mixed phase, trading above its ${aboves.join(", ")} SMA but below the others. This often indicates consolidation.`;
         }
     } else {
         verdict = `<i class="fa-solid fa-circle-question"></i> <strong>Insufficient History:</strong> Not enough historical data to generate a complete moving averages verdict (200 trading days required for long-term SMA).`;
     }
-    
+
     document.getElementById("sma-summary-verdict").innerHTML = verdict;
+
+    // Update RSI
+    const lastRSI = data.rsi && data.rsi.length > 0 ? data.rsi[data.rsi.length - 1] : null;
+    const rsiValEl = document.getElementById("rsi-val");
+    const rsiIndEl = document.getElementById("rsi-indicator");
+
+    if (lastRSI === null) {
+        rsiValEl.textContent = "N/A";
+        rsiIndEl.textContent = "Insufficient Data";
+        rsiIndEl.className = "status-indicator";
+    } else {
+        rsiValEl.textContent = lastRSI.toFixed(2);
+        if (lastRSI > 70) {
+            rsiIndEl.textContent = "Overbought (Bearish)";
+            rsiIndEl.className = "status-indicator below"; // red
+        } else if (lastRSI < 30) {
+            rsiIndEl.textContent = "Oversold (Bullish)";
+            rsiIndEl.className = "status-indicator above"; // green
+        } else {
+            rsiIndEl.textContent = "Neutral";
+            rsiIndEl.className = "status-indicator"; // default
+        }
+    }
+
+    // Update Bollinger Bands
+    const lastBBUpper = data.bb_upper && data.bb_upper.length > 0 ? data.bb_upper[data.bb_upper.length - 1] : null;
+    const lastBBLower = data.bb_lower && data.bb_lower.length > 0 ? data.bb_lower[data.bb_lower.length - 1] : null;
+    const bbValEl = document.getElementById("bb-val");
+    const bbIndEl = document.getElementById("bb-indicator");
+
+    if (lastBBUpper === null || lastBBLower === null) {
+        bbValEl.textContent = "N/A";
+        bbIndEl.textContent = "Insufficient Data";
+        bbIndEl.className = "status-indicator";
+    } else {
+        bbValEl.innerHTML = `Upper: ₹${lastBBUpper.toFixed(2)}<br>Lower: ₹${lastBBLower.toFixed(2)}`;
+        if (lastPrice > lastBBUpper) {
+            bbIndEl.textContent = "Upside Breakout";
+            bbIndEl.className = "status-indicator above";
+        } else if (lastPrice < lastBBLower) {
+            bbIndEl.textContent = "Downside Breakout";
+            bbIndEl.className = "status-indicator below";
+        } else {
+            bbIndEl.textContent = "Inside Range";
+            bbIndEl.className = "status-indicator";
+        }
+    }
+}
+
+function renderNews(newsItems) {
+    const newsContainer = document.getElementById("stock-news-list");
+    if (!newsItems || newsItems.length === 0) {
+        newsContainer.innerHTML = `<p class="text-muted">No recent news available for this stock.</p>`;
+        return;
+    }
+
+    let html = '<div class="news-grid">';
+    newsItems.forEach(item => {
+        // Format the date if available
+        let dateStr = "";
+        if (item.time) {
+            try {
+                const dateObj = new Date(item.time);
+                dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            } catch (e) {
+                dateStr = item.time;
+            }
+        }
+
+        html += `
+            <a href="${item.link}" target="_blank" class="news-item">
+                <div class="news-content">
+                    <h5 class="news-title">${item.title}</h5>
+                    <div class="news-meta">
+                        <span class="news-publisher">${item.publisher}</span>
+                        ${dateStr ? `<span class="news-date">${dateStr}</span>` : ''}
+                    </div>
+                </div>
+                <i class="fa-solid fa-arrow-up-right-from-square news-icon"></i>
+            </a>
+        `;
+    });
+    html += '</div>';
+    newsContainer.innerHTML = html;
 }
 
 function renderChart(data) {
     const ctx = document.getElementById("stockHistoryChart").getContext("2d");
-    
+
     // Destroy previous chart instance if exists to clean memory
     if (historyChartInstance) {
         historyChartInstance.destroy();
     }
-    
+
     // Premium Chart.js Line configuration
     historyChartInstance = new Chart(ctx, {
         type: 'line',
@@ -961,9 +1159,9 @@ function renderChart(data) {
                     // Soft transparent gradient below the main price line
                     backgroundColor: (context) => {
                         const chart = context.chart;
-                        const {ctx, chartArea} = chart;
+                        const { ctx, chartArea } = chart;
                         if (!chartArea) return null;
-                        
+
                         const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
                         gradient.addColorStop(0, 'rgba(129, 140, 248, 0.15)');
                         gradient.addColorStop(1, 'rgba(129, 140, 248, 0.0)');
@@ -975,6 +1173,17 @@ function renderChart(data) {
                     label: '20-Day SMA',
                     data: data.sma20,
                     borderColor: '#60a5fa',
+                    borderWidth: 1.5,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: '50-Day SMA',
+                    data: data.sma50,
+                    borderColor: '#2dd4bf',
                     borderWidth: 1.5,
                     borderDash: [5, 5],
                     pointRadius: 0,
@@ -1042,7 +1251,7 @@ function renderChart(data) {
                         weight: 'bold'
                     },
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             let label = context.dataset.label || '';
                             if (label) {
                                 label += ': ';
@@ -1083,7 +1292,7 @@ function renderChart(data) {
                             family: 'Inter',
                             size: 10
                         },
-                        callback: function(value) {
+                        callback: function (value) {
                             return '₹' + value;
                         }
                     }
