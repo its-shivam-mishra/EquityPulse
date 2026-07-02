@@ -52,40 +52,15 @@ def ensure_excel_file():
         print(f"Created default Excel file at {EXCEL_PATH.resolve()}")
 
 def read_stocks() -> pd.DataFrame:
-    """Read stocks from the Excel file and auto-migrate legacy format."""
-    ensure_excel_file()
+    """Read stocks from Cosmos DB."""
+    from app.cosmos_service import cosmos_service
     try:
-        df = pd.read_excel(EXCEL_PATH)
-        
-        # Legacy migration check: if 'Stock Name' exists but 'Company Name' does not
-        if "Stock Name" in df.columns and "Company Name" not in df.columns:
-            # We are reading an old file. Let's migrate it in memory and then overwrite.
-            df["Company Name"] = df["Stock Name"]
-            df["Stock Code"] = ""
-            df["Exchange"] = ""
-            for i, row in df.iterrows():
-                symbol = str(row["Stock Name"]).strip().upper()
-                if symbol.endswith(".NS"):
-                    df.at[i, "Stock Code"] = symbol[:-3]
-                    df.at[i, "Exchange"] = "NSE"
-                elif symbol.endswith(".BO"):
-                    df.at[i, "Stock Code"] = symbol[:-3]
-                    df.at[i, "Exchange"] = "BSE"
-                else:
-                    df.at[i, "Stock Code"] = symbol
-                    df.at[i, "Exchange"] = "NSE" # Default
+        items = cosmos_service.get_all_stocks()
+        if not items:
+            return pd.DataFrame(columns=COLUMNS)
             
-            # Fetch human-readable company names for the legacy entries
-            # We use a dummy object since we don't have ticker_obj here
-            for i, row in df.iterrows():
-                sym = f"{df.at[i, 'Stock Code']}.{'NS' if df.at[i, 'Exchange'] == 'NSE' else 'BO'}"
-                ticker = yf.Ticker(sym)
-                df.at[i, "Company Name"] = get_company_name(ticker, sym)
-
-            # Drop old column and save immediately
-            df = df.drop(columns=["Stock Name"])
-            write_stocks(df) # Will re-read from memory here? Wait, write_stocks takes df. Let's just pass it.
-
+        df = pd.DataFrame(items)
+        
         # Ensure correct columns exist
         for col in COLUMNS:
             if col not in df.columns:
@@ -100,18 +75,12 @@ def read_stocks() -> pd.DataFrame:
         df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
         return df[COLUMNS]
     except Exception as e:
-        print(f"Error reading Excel file: {e}")
+        print(f"Error reading from Cosmos DB: {e}")
         return pd.DataFrame(columns=COLUMNS)
 
 def write_stocks(df: pd.DataFrame):
-    """Write DataFrame of stocks back to Excel.
-
-    Uses an atomic write strategy: writes to a temporary file in the same
-    directory first, then replaces the target. This avoids PermissionError
-    when stocks.xlsx is concurrently open in Excel (which locks the file on
-    Windows but still allows replacement via a temp-file swap).
-    """
-    ensure_excel_file()
+    """Write DataFrame of stocks back to Cosmos DB."""
+    from app.cosmos_service import cosmos_service
     # Format
     df["Company Name"] = df["Company Name"].astype(str).str.strip()
     df["Stock Code"] = df["Stock Code"].astype(str).str.strip().str.upper()
@@ -119,22 +88,21 @@ def write_stocks(df: pd.DataFrame):
     df["Buying Price"] = pd.to_numeric(df["Buying Price"], errors="coerce").fillna(0.0)
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
 
-    # Write to a sibling temp file, then atomically replace the target.
-    # On Windows, shutil.move handles cross-device moves and uses
-    # os.replace internally when source and destination are on the same volume.
-    tmp_fd, tmp_path_str = tempfile.mkstemp(
-        suffix=".xlsx", prefix="stocks_tmp_", dir=ASSETS_DIR
-    )
-    tmp_path = Path(tmp_path_str)
-    try:
-        os.close(tmp_fd)  # pandas opens the file itself
-        df[COLUMNS].to_excel(tmp_path, index=False)
-        shutil.move(str(tmp_path), str(EXCEL_PATH))
-    except Exception:
-        # Clean up orphaned temp file on failure
-        if tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
-        raise
+    # Upsert each row to Cosmos DB
+    for _, row in df.iterrows():
+        stock_code = row["Stock Code"]
+        exchange = row["Exchange"]
+        if not stock_code:
+            continue
+            
+        stock_item = {
+            "Company Name": row["Company Name"],
+            "Stock Code": stock_code,
+            "Exchange": exchange,
+            "Buying Price": row["Buying Price"],
+            "Quantity": row["Quantity"]
+        }
+        cosmos_service.upsert_stock(stock_item)
 
 # NSE trade-segment suffixes that Yahoo Finance does not recognise.
 # These are administrative markers (Trade-to-Trade, suspended, SME, etc.)
@@ -423,122 +391,93 @@ def get_all_stocks_with_metrics() -> list:
 
 def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float) -> dict:
     """
-    Add a stock transaction.
-    If stock already exists, merge it:
-    - New quantity = old_qty + new_qty
-    - New average price = (old_price * old_qty + new_price * new_qty) / (old_qty + new_qty)
+    Add a stock transaction directly to Cosmos DB.
     """
-    df = read_stocks()
+    from app.cosmos_service import cosmos_service
     stock_code_upper = stock_code.strip().upper()
     exchange_upper = exchange.strip().upper()
+    suffix = ".NS" if exchange_upper == "NSE" else ".BO" if exchange_upper == "BSE" else ""
+    symbol = f"{stock_code_upper}{suffix}"
     
-    match_idx = None
-    for idx, row in df.iterrows():
-        if str(row["Stock Code"]).upper() == stock_code_upper and str(row["Exchange"]).upper() == exchange_upper:
-            match_idx = idx
-            break
-    
-    if match_idx is not None:
-        old_price = float(df.loc[match_idx, "Buying Price"])
-        old_qty = float(df.loc[match_idx, "Quantity"])
+    existing = cosmos_service.get_stock(symbol, exchange_upper)
+    if existing:
+        old_price = float(existing.get("Buying Price", 0))
+        old_qty = float(existing.get("Quantity", 0))
         
         total_qty = old_qty + quantity
-        if total_qty > 0:
-            avg_price = (old_price * old_qty + price * quantity) / total_qty
-        else:
-            avg_price = 0.0
+        avg_price = (old_price * old_qty + price * quantity) / total_qty if total_qty > 0 else 0.0
             
-        df.loc[match_idx, "Buying Price"] = avg_price
-        df.loc[match_idx, "Quantity"] = total_qty
-        # Optionally update company name to the newest provided
-        df.loc[match_idx, "Company Name"] = company_name.strip()
+        existing["Buying Price"] = avg_price
+        existing["Quantity"] = total_qty
+        existing["Company Name"] = company_name.strip()
+        cosmos_service.upsert_stock(existing)
         action = "merged"
     else:
-        new_row = pd.DataFrame([{
+        new_item = {
             "Company Name": company_name.strip(),
             "Stock Code": stock_code_upper,
             "Exchange": exchange_upper,
             "Buying Price": price,
-            "Quantity": quantity
-        }])
-        df = pd.concat([df, new_row], ignore_index=True)
+            "Quantity": quantity,
+            "id": symbol
+        }
+        cosmos_service.upsert_stock(new_item)
         action = "added"
         
-    write_stocks(df)
     return {"stock_code": stock_code_upper, "action": action}
 
 def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None) -> dict:
-    """Directly update price, quantity, and optionally company name, stock code, and exchange."""
-    # Find the stock by its current symbol (Stock Code + Exchange mapped)
-    # Actually, the frontend will pass the symbol as "CODE.EXCHANGE". Let's parse it to find the row.
+    """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB."""
+    from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
-    df = read_stocks()
+    exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    match_idx = None
-    for idx, row in df.iterrows():
-        stock_code = str(row["Stock Code"]).strip().upper()
-        exchange = str(row["Exchange"]).strip().upper()
-        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
-        row_symbol = f"{stock_code}{suffix}"
-        
-        if format_symbol(row_symbol).upper() == formatted_symbol:
-            match_idx = idx
-            break
+    existing = cosmos_service.get_stock(formatted_symbol, exchange)
             
-    if match_idx is None:
+    if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
-    df.loc[match_idx, "Buying Price"] = price
-    df.loc[match_idx, "Quantity"] = quantity
+    existing["Buying Price"] = price
+    existing["Quantity"] = quantity
     
     if new_company_name:
-        df.loc[match_idx, "Company Name"] = new_company_name.strip()
-    if new_stock_code:
-        df.loc[match_idx, "Stock Code"] = new_stock_code.strip().upper()
-    if new_exchange:
-        df.loc[match_idx, "Exchange"] = new_exchange.strip().upper()
+        existing["Company Name"] = new_company_name.strip()
+        
+    if new_stock_code or new_exchange:
+        old_exchange = existing["Exchange"]
+        old_id = existing["id"]
+        
+        if new_stock_code:
+            existing["Stock Code"] = new_stock_code.strip().upper()
+        if new_exchange:
+            existing["Exchange"] = new_exchange.strip().upper()
+            
+        new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
+        new_id = f"{existing['Stock Code']}{new_suffix}"
+        existing["id"] = new_id
+        
+        cosmos_service.delete_stock(old_id, old_exchange)
+        cosmos_service.upsert_stock(existing)
+    else:
+        cosmos_service.upsert_stock(existing)
     
-    write_stocks(df)
-    return {"stock_code": df.loc[match_idx, "Stock Code"], "action": "updated"}
+    return {"stock_code": existing["Stock Code"], "action": "updated"}
 
 def delete_stock(symbol: str) -> dict:
-    """Delete a stock from the portfolio."""
+    """Delete a stock from Cosmos DB."""
+    from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
-    df = read_stocks()
+    exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    match_mask = pd.Series([False] * len(df))
-    actual_deleted = ""
-    for idx, row in df.iterrows():
-        stock_code = str(row["Stock Code"]).strip().upper()
-        exchange = str(row["Exchange"]).strip().upper()
-        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
-        row_symbol = f"{stock_code}{suffix}"
-        
-        if format_symbol(row_symbol).upper() == formatted_symbol:
-            match_mask[idx] = True
-            actual_deleted = row_symbol
-            break
-            
-    if not match_mask.any():
+    success = cosmos_service.delete_stock(formatted_symbol, exchange)
+    if not success:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
-    df = df[~match_mask]
-    write_stocks(df)
-    return {"symbol": actual_deleted, "action": "deleted"}
+    return {"symbol": formatted_symbol, "action": "deleted"}
 
 def _check_portfolio_writable():
-    """Raise a descriptive ValueError if the portfolio Excel file is write-locked."""
-    ensure_excel_file()
-    try:
-        # Try to open the file for writing; if it's locked by Excel this raises
-        # PermissionError on Windows before we ever try to write.
-        with open(EXCEL_PATH, "r+b"):
-            pass
-    except PermissionError:
-        raise ValueError(
-            "Cannot write to 'stocks.xlsx' — the file is currently open in Microsoft Excel "
-            "or another program. Please close it and try the upload again."
-        )
+    """No-op for Cosmos DB as it handles concurrent writes gracefully."""
+    pass
 
 
 def merge_uploaded_file(file_path: Path) -> dict:
@@ -736,31 +675,35 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
 
 def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str) -> dict:
-    """Update only the metadata of a stock."""
+    """Update only the metadata of a stock in Cosmos DB."""
+    from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
-    df = read_stocks()
+    exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    match_idx = None
-    for idx, row in df.iterrows():
-        stock_code = str(row["Stock Code"]).strip().upper()
-        exchange = str(row["Exchange"]).strip().upper()
-        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
-        row_symbol = f"{stock_code}{suffix}"
-        
-        if format_symbol(row_symbol).upper() == formatted_symbol:
-            match_idx = idx
-            break
-            
-    if match_idx is None:
+    existing = cosmos_service.get_stock(formatted_symbol, exchange)
+    if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
     if new_company_name:
-        df.loc[match_idx, "Company Name"] = new_company_name.strip()
-    if new_stock_code:
-        df.loc[match_idx, "Stock Code"] = new_stock_code.strip().upper()
-    if new_exchange:
-        df.loc[match_idx, "Exchange"] = new_exchange.strip().upper()
+        existing["Company Name"] = new_company_name.strip()
+        
+    if new_stock_code or new_exchange:
+        old_exchange = existing["Exchange"]
+        old_id = existing["id"]
+        
+        if new_stock_code:
+            existing["Stock Code"] = new_stock_code.strip().upper()
+        if new_exchange:
+            existing["Exchange"] = new_exchange.strip().upper()
+            
+        new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
+        new_id = f"{existing['Stock Code']}{new_suffix}"
+        existing["id"] = new_id
+        
+        cosmos_service.delete_stock(old_id, old_exchange)
+        cosmos_service.upsert_stock(existing)
+    else:
+        cosmos_service.upsert_stock(existing)
     
-    write_stocks(df)
     return {"status": "success", "message": f"Stock {formatted_symbol} details updated successfully."}
 

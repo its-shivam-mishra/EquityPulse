@@ -36,10 +36,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure Excel file exists on startup
 @app.on_event("startup")
 def startup_event():
-    ensure_excel_file()
+    from app.cosmos_service import cosmos_service
+    # Initializes Cosmos DB on module load
+    _ = cosmos_service.get_all_stocks()
+    
+    # Migrate data from Excel if Cosmos DB is empty
+    from pathlib import Path
+    import pandas as pd
+    excel_path = Path("assets/stocks.xlsx")
+    if excel_path.exists():
+        try:
+            items = cosmos_service.get_all_stocks()
+            if not items:
+                df = pd.read_excel(excel_path)
+                from app.services import write_stocks
+                write_stocks(df)
+                print("Migrated existing Excel data to Cosmos DB.")
+        except Exception as e:
+            print(f"Error during migration check: {e}")
 
 # Pydantic Schemas for Requests
 class StockTransaction(BaseModel):
