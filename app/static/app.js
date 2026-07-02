@@ -372,6 +372,7 @@ function renderStocksTable(stocks) {
         const tvExchange = stock.symbol.endsWith(".BO") ? "BSE" : "NSE";
         const tvUrl = `https://in.tradingview.com/chart/?symbol=${tvExchange}%3A${baseSymbol}`;
         const screenerUrl = `https://www.screener.in/company/${baseSymbol}/`;
+        const mastertrackerUrl = `https://mastertracker.financiallyfree.in/val/${baseSymbol}`;
 
         const displayTitle = stock.company_name || stock.symbol;
         row.innerHTML = `
@@ -389,6 +390,9 @@ function renderStocksTable(stocks) {
                             </a>
                             <a href="${screenerUrl}" target="_blank" class="external-link" title="Screener">
                                 <img src="https://www.screener.in/favicon.ico" alt="Scr" class="external-icon">
+                            </a>
+                            <a href="${mastertrackerUrl}" target="_blank" class="external-link" title="Master Tracker">
+                                <img src="https://images.moneycontrol.com/images/favicon-1/favicon.ico" alt="MT" class="external-icon">
                             </a>
                         </div>
                     </div>
@@ -472,26 +476,26 @@ function openEditStockModal(cell) {
     const stockCode = cell.dataset.stockCode;
     const exchange = cell.dataset.exchange;
     const companyName = cell.dataset.companyName;
-    
+
     // Find price and quantity from the row
     const row = cell.closest("tr");
     const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
     const priceCell = row.querySelector(".editable-cell[data-field='price']");
-    
+
     const qty = qtyCell ? qtyCell.dataset.value : "";
     const price = priceCell ? priceCell.dataset.value : "";
-    
+
     // Fill Add/Update Stock Form
     document.getElementById("stock-company-name").value = companyName || "";
     document.getElementById("stock-code").value = stockCode || "";
-    
+
     const exSelect = document.getElementById("stock-exchange");
     if (exchange === "BSE") exSelect.value = "BSE";
     else exSelect.value = "NSE";
-    
+
     document.getElementById("stock-price").value = price;
     document.getElementById("stock-qty").value = qty;
-    
+
     // Switch to Add View
     switchView("add-view");
 }
@@ -510,24 +514,24 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
     const newCompanyName = document.getElementById("edit-company-name").value.trim();
     const newStockCode = document.getElementById("edit-stock-code").value.trim().toUpperCase();
     const newExchange = document.getElementById("edit-exchange").value;
-    
+
     if (!newStockCode) {
         showToast("Stock Code cannot be empty", "error");
         return;
     }
-    
+
     // To update, we still need current price and qty because the PUT endpoint requires them.
     // Let's find the row that corresponds to this symbol.
     const symbolCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
     if (!symbolCell) return;
-    
+
     const row = symbolCell.closest("tr");
     const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
     const priceCell = row.querySelector(".editable-cell[data-field='price']");
-    
+
     const currentQty = parseFloat(qtyCell.dataset.value);
     const currentPrice = parseFloat(priceCell.dataset.value);
-    
+
     const requestBody = {
         price: currentPrice,
         quantity: currentQty,
@@ -535,12 +539,12 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
         stock_code: newStockCode,
         exchange: newExchange
     };
-    
+
     const saveBtn = document.getElementById("btn-save-edit-modal");
     const originalText = saveBtn.innerText;
     saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     saveBtn.disabled = true;
-    
+
     try {
         const response = await fetch(`/api/stocks/${encodeURIComponent(originalSymbol)}`, {
             method: "PUT",
@@ -672,7 +676,7 @@ function activateInlineEdit(cell) {
     if (cell.classList.contains("editing")) return; // already active
 
     const field = cell.dataset.field; // 'quantity' | 'price' | 'symbol'
-    
+
     if (field === "symbol") {
         // Open dedicated Edit Stock Modal
         openEditStockModal(cell);
@@ -779,8 +783,8 @@ async function commitInlineEdit(cell, symbol) {
     if (isQty) currentQty = newValue;
     else currentPrice = newValue;
 
-    const requestBody = { 
-        price: currentPrice, 
+    const requestBody = {
+        price: currentPrice,
         quantity: currentQty,
         company_name: symbolCell.dataset.companyName,
         stock_code: symbolCell.dataset.stockCode,
