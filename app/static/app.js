@@ -14,6 +14,14 @@ document.addEventListener("DOMContentLoaded", () => {
     initDetails();
     initMaskToggle();
     initColumnVisibility();
+    // Sidebar Toggle
+    const sidebarToggle = document.getElementById("sidebar-toggle");
+    const appContainer = document.querySelector(".app-container");
+    if (sidebarToggle && appContainer) {
+        sidebarToggle.addEventListener("click", () => {
+            appContainer.classList.toggle("sidebar-closed");
+        });
+    }
 });
 
 function initMaskToggle() {
@@ -371,7 +379,7 @@ function renderStocksTable(stocks) {
             <td>
                 <div class="ticker-cell">
                     <div class="symbol-title-row">
-                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-value="${stock.symbol}" data-company-name="${displayTitle}" title="Click to edit symbol (Current: ${stock.symbol})">
+                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" title="Click to edit details">
                             <span class="symbol-text editable-display">${displayTitle}</span>
                             <i class="fa-solid fa-pen-to-square edit-pencil"></i>
                         </div>
@@ -384,7 +392,7 @@ function renderStocksTable(stocks) {
                             </a>
                         </div>
                     </div>
-                    <span class="exchange-text">${stock.symbol.endsWith(".BO") ? "BSE India" : stock.symbol.endsWith(".NS") ? "NSE India" : "Global / US"}</span>
+                    <span class="exchange-text">${stock.exchange === "BSE" ? "BSE India" : stock.exchange === "NSE" ? "NSE India" : stock.exchange}</span>
                 </div>
             </td>
             <td class="text-right font-bold editable-cell" data-field="quantity" data-symbol="${stock.symbol}" data-value="${qty}" title="Click to edit quantity">
@@ -425,12 +433,16 @@ function renderStocksTable(stocks) {
             openStockDetails(stock.symbol);
         });
 
-        // Wire up inline editing for editable cells
-        row.querySelectorAll(".editable-cell").forEach(cell => {
-            cell.addEventListener("click", (e) => {
-                e.stopPropagation();
-                activateInlineEdit(cell);
-            });
+        // Wire up inline editing so clicking anywhere in the cell triggers it
+        row.querySelectorAll("td").forEach(td => {
+            const cell = td.classList.contains("editable-cell") ? td : td.querySelector(".editable-cell");
+            if (cell) {
+                td.addEventListener("click", (e) => {
+                    if (e.target.closest("a") || e.target.closest("button")) return;
+                    e.stopPropagation();
+                    activateInlineEdit(cell);
+                });
+            }
         });
 
         tableBody.appendChild(row);
@@ -450,6 +462,109 @@ function renderStocksTable(stocks) {
 
     applyColumnVisibility();
 }
+
+// ==========================================
+// MODAL LOGIC FOR EDITING STOCK DETAILS
+// ==========================================
+function openEditStockModal(cell) {
+    // Extract data from cell
+    const symbol = cell.dataset.symbol;
+    const stockCode = cell.dataset.stockCode;
+    const exchange = cell.dataset.exchange;
+    const companyName = cell.dataset.companyName;
+    
+    // Find price and quantity from the row
+    const row = cell.closest("tr");
+    const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
+    const priceCell = row.querySelector(".editable-cell[data-field='price']");
+    
+    const qty = qtyCell ? qtyCell.dataset.value : "";
+    const price = priceCell ? priceCell.dataset.value : "";
+    
+    // Fill Add/Update Stock Form
+    document.getElementById("stock-company-name").value = companyName || "";
+    document.getElementById("stock-code").value = stockCode || "";
+    
+    const exSelect = document.getElementById("stock-exchange");
+    if (exchange === "BSE") exSelect.value = "BSE";
+    else exSelect.value = "NSE";
+    
+    document.getElementById("stock-price").value = price;
+    document.getElementById("stock-qty").value = qty;
+    
+    // Switch to Add View
+    switchView("add-view");
+}
+
+function closeEditStockModal() {
+    document.getElementById("edit-stock-modal").classList.add("hidden");
+    document.getElementById("edit-stock-form").reset();
+}
+
+document.getElementById("btn-close-edit-modal")?.addEventListener("click", closeEditStockModal);
+document.getElementById("btn-cancel-edit-modal")?.addEventListener("click", closeEditStockModal);
+
+document.getElementById("edit-stock-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const originalSymbol = document.getElementById("edit-original-symbol").value;
+    const newCompanyName = document.getElementById("edit-company-name").value.trim();
+    const newStockCode = document.getElementById("edit-stock-code").value.trim().toUpperCase();
+    const newExchange = document.getElementById("edit-exchange").value;
+    
+    if (!newStockCode) {
+        showToast("Stock Code cannot be empty", "error");
+        return;
+    }
+    
+    // To update, we still need current price and qty because the PUT endpoint requires them.
+    // Let's find the row that corresponds to this symbol.
+    const symbolCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
+    if (!symbolCell) return;
+    
+    const row = symbolCell.closest("tr");
+    const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
+    const priceCell = row.querySelector(".editable-cell[data-field='price']");
+    
+    const currentQty = parseFloat(qtyCell.dataset.value);
+    const currentPrice = parseFloat(priceCell.dataset.value);
+    
+    const requestBody = {
+        price: currentPrice,
+        quantity: currentQty,
+        company_name: newCompanyName,
+        stock_code: newStockCode,
+        exchange: newExchange
+    };
+    
+    const saveBtn = document.getElementById("btn-save-edit-modal");
+    const originalText = saveBtn.innerText;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/stocks/${encodeURIComponent(originalSymbol)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Failed to update.");
+        }
+
+        closeEditStockModal();
+        showToast("Stock details updated!", "success");
+        fetchAndRenderStocks(); // full refresh
+
+    } catch (error) {
+        showToast("Update failed: " + error.message, "error");
+    } finally {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+    }
+});
+
 
 function updateSummaryHeader(stocks) {
     let totalInvested = 0;
@@ -554,29 +669,32 @@ async function deleteStockHolding(symbol) {
 let _activeEditCell = null;
 
 function activateInlineEdit(cell) {
-    // If another cell is already being edited, commit it first
+    if (cell.classList.contains("editing")) return; // already active
+
+    const field = cell.dataset.field; // 'quantity' | 'price' | 'symbol'
+    
+    if (field === "symbol") {
+        // Open dedicated Edit Stock Modal
+        openEditStockModal(cell);
+        return;
+    }
+
     if (_activeEditCell && _activeEditCell !== cell) {
         cancelInlineEdit(_activeEditCell);
     }
 
-    if (cell.classList.contains("editing")) return; // already active
-
-    const field = cell.dataset.field;         // 'quantity' | 'price' | 'symbol'
     const symbol = cell.dataset.symbol;
-    const isSymbol = field === "symbol";
-    const rawValue = isSymbol ? cell.dataset.value : parseFloat(cell.dataset.value);
+    const isQty = field === "quantity";
+    const rawValue = parseFloat(cell.dataset.value);
 
     // Build the inline input element
-    const isQty = field === "quantity";
     const input = document.createElement("input");
-    input.type = isSymbol ? "text" : "number";
+    input.type = "number";
     input.className = "inline-edit-input";
-    input.value = isSymbol ? rawValue : (isQty ? rawValue : rawValue.toFixed(4));
+    input.value = isQty ? rawValue : rawValue.toFixed(4);
 
-    if (!isSymbol) {
-        input.step = isQty ? "1" : "0.01";
-        input.min = isQty ? "1" : "0.01";
-    }
+    input.step = isQty ? "1" : "0.01";
+    input.min = isQty ? "1" : "0.01";
     input.setAttribute("data-original", input.value);
 
     // Save button
@@ -595,7 +713,6 @@ function activateInlineEdit(cell) {
     cell.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "inline-edit-wrapper";
-    if (isSymbol) wrapper.classList.add("symbol-edit");
     wrapper.appendChild(input);
     wrapper.appendChild(saveBtn);
     wrapper.appendChild(cancelBtn);
@@ -620,16 +737,10 @@ function activateInlineEdit(cell) {
 function cancelInlineEdit(cell) {
     if (!cell.classList.contains("editing")) return;
     const field = cell.dataset.field;
-    const isSymbol = field === "symbol";
     const isQty = field === "quantity";
 
-    let displayHtml = "";
-    if (isSymbol) {
-        displayHtml = `<span class="symbol-text editable-display">${cell.dataset.companyName || cell.dataset.value}</span>`;
-    } else {
-        const rawValue = parseFloat(cell.dataset.value);
-        displayHtml = `<span class="editable-display">${isQty ? rawValue : "\u20B9" + rawValue.toFixed(2)}</span>`;
-    }
+    const rawValue = parseFloat(cell.dataset.value);
+    const displayHtml = `<span class="editable-display">${isQty ? rawValue : "\u20B9" + rawValue.toFixed(2)}</span>`;
 
     cell.classList.remove("editing");
     cell.innerHTML = `${displayHtml}<i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
@@ -640,56 +751,41 @@ async function commitInlineEdit(cell, symbol) {
     if (!cell.classList.contains("editing")) return;
 
     const field = cell.dataset.field;
-    const isSymbol = field === "symbol";
     const isQty = field === "quantity";
     const input = cell.querySelector(".inline-edit-input");
 
-    let newValue;
-    if (isSymbol) {
-        newValue = input.value.trim().toUpperCase();
-        if (!newValue) {
-            input.classList.add("input-error");
-            showToast("Symbol cannot be empty.", "error");
-            input.focus();
-            return;
-        }
-        const original = input.dataset.original;
-        if (newValue === original) {
-            cancelInlineEdit(cell);
-            return;
-        }
-    } else {
-        newValue = parseFloat(input.value);
-        if (isNaN(newValue) || newValue <= 0) {
-            input.classList.add("input-error");
-            showToast("Please enter a valid positive number.", "error");
-            input.focus();
-            return;
-        }
-        const original = parseFloat(input.dataset.original);
-        if (newValue === original) {
-            cancelInlineEdit(cell);
-            return;
-        }
+    let newValue = parseFloat(input.value);
+    if (isNaN(newValue) || newValue <= 0) {
+        input.classList.add("input-error");
+        showToast("Please enter a valid positive number.", "error");
+        input.focus();
+        return;
+    }
+    const original = parseFloat(input.dataset.original);
+    if (newValue === original) {
+        cancelInlineEdit(cell);
+        return;
     }
 
     // Get the sibling cell values so we can send both price + qty to the PUT endpoint
     const row = cell.closest("tr");
     const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
     const priceCell = row.querySelector(".editable-cell[data-field='price']");
+    const symbolCell = row.querySelector(".editable-cell[data-field='symbol']");
 
     let currentQty = parseFloat(qtyCell.dataset.value);
     let currentPrice = parseFloat(priceCell.dataset.value);
 
-    if (!isSymbol) {
-        if (isQty) currentQty = newValue;
-        else currentPrice = newValue;
-    }
+    if (isQty) currentQty = newValue;
+    else currentPrice = newValue;
 
-    const requestBody = { price: currentPrice, quantity: currentQty };
-    if (isSymbol) {
-        requestBody.new_symbol = newValue;
-    }
+    const requestBody = { 
+        price: currentPrice, 
+        quantity: currentQty,
+        company_name: symbolCell.dataset.companyName,
+        stock_code: symbolCell.dataset.stockCode,
+        exchange: symbolCell.dataset.exchange
+    };
 
     // Show saving state
     const saveBtn = cell.querySelector(".inline-edit-btn.save");
@@ -709,29 +805,23 @@ async function commitInlineEdit(cell, symbol) {
 
         // Update the data-value attribute so future edits use the new value
         cell.dataset.value = newValue.toString();
-        if (isSymbol) cell.dataset.symbol = newValue; // Also update symbol reference if symbol changed
 
         cell.classList.remove("editing");
         _activeEditCell = null;
 
         // Update display text inline without full table refresh
         let displayHtml = "";
-        if (isSymbol) {
-            displayHtml = `<span class="symbol-text editable-display">${newValue}</span>`;
-            // Also need to trigger full refresh as other links rely on symbol
-        } else {
-            const displayVal = isQty ? newValue : `\u20B9${newValue.toFixed(2)}`;
-            displayHtml = `<span class="editable-display">${displayVal}</span>`;
-        }
+        const displayVal = isQty ? newValue : `\u20B9${newValue.toFixed(2)}`;
+        displayHtml = `<span class="editable-display">${displayVal}</span>`;
 
         cell.innerHTML = `${displayHtml}<i class="fa-solid fa-pen-to-square edit-pencil"></i>`;
 
         // Re-wire the click event on the updated cell
         cell.addEventListener("click", (e) => { e.stopPropagation(); activateInlineEdit(cell); });
 
-        showToast(`${isSymbol ? "Symbol" : (isQty ? "quantity" : "buy price")} updated!`, "success");
+        showToast(`${isQty ? "quantity" : "buy price"} updated!`, "success");
 
-        // Full refresh so calculated columns and new links update
+        // Full refresh so calculated columns update
         fetchAndRenderStocks();
 
     } catch (error) {
@@ -755,7 +845,9 @@ function initForms() {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const symbol = document.getElementById("stock-symbol").value.trim();
+        const companyName = document.getElementById("stock-company-name").value.trim();
+        const stockCode = document.getElementById("stock-code").value.trim().toUpperCase();
+        const exchange = document.getElementById("stock-exchange").value;
         const price = parseFloat(document.getElementById("stock-price").value);
         const qty = parseFloat(document.getElementById("stock-qty").value);
 
@@ -770,7 +862,7 @@ function initForms() {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ symbol, price, quantity: qty })
+                body: JSON.stringify({ company_name: companyName, stock_code: stockCode, exchange: exchange, price, quantity: qty })
             });
 
             if (!response.ok) {
@@ -947,6 +1039,8 @@ function openStockDetails(symbol) {
             ? "NSE India Listed"
             : "Global / US Market";
 
+    document.getElementById("detail-price").textContent = "Loading...";
+
     // Reset time selector back to 1 Year default
     const timeBtns = document.querySelectorAll(".time-btn");
     timeBtns.forEach(btn => {
@@ -977,6 +1071,14 @@ async function loadHistoryChart(symbol, period) {
         }
 
         const data = await response.json();
+
+        // Update Price in Header
+        const lastPrice = data.prices[data.prices.length - 1];
+        if (lastPrice !== null && lastPrice !== undefined) {
+            document.getElementById("detail-price").textContent = `₹${lastPrice.toFixed(2)}`;
+        } else {
+            document.getElementById("detail-price").textContent = `N/A`;
+        }
 
         // Process UI values for moving averages card
         updateSMACards(data);

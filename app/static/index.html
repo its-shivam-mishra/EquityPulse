@@ -5,22 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EquityPulse - Indian Stock Portfolio Analyser</title>
     <!-- Google Fonts -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EquityPulse - Indian Stock Portfolio Analyser</title>
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=6">
+    <style id="modal-styles">
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; backdrop-filter: blur(4px); transition: opacity 0.3s ease;
+        }
+        .modal-overlay.hidden {
+            opacity: 0; pointer-events: none; display: none !important;
+        }
+        .modal-card {
+            background-color: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+            width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color); animation: modalSlideIn 0.3s ease-out;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
+        }
+        .modal-header h3 { margin: 0; color: var(--text-main); }
+        .btn-close-modal {
+            background: none; border: none; color: var(--text-muted); font-size: 1.2rem;
+            cursor: pointer; transition: color 0.2s;
+        }
+        .btn-close-modal:hover { color: var(--danger); }
+        @keyframes modalSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
-            <div class="logo-area">
-                <i class="fa-solid fa-chart-line pulse-logo"></i>
-                <h2>EquityPulse</h2>
+            <div class="logo-area" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;" class="brand-group">
+                    <i class="fa-solid fa-chart-line pulse-logo"></i>
+                    <h2 class="brand-text">EquityPulse</h2>
+                </div>
+                <button id="sidebar-toggle" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 0;">
+                    <i class="fa-solid fa-angles-left"></i>
+                </button>
             </div>
             <nav class="nav-menu">
                 <button class="nav-item active" data-target="dashboard-view" id="nav-dashboard">
@@ -153,11 +197,19 @@
                         </div>
                         <form id="stock-form" class="form-grid">
                             <div class="form-group">
-                                <label for="stock-symbol">Stock Symbol <span class="required">*</span></label>
-                                <div class="input-with-hint">
-                                    <input type="text" id="stock-symbol" placeholder="e.g. RELIANCE, INFIBEAM.BO, TCS" required>
-                                    <small class="form-hint">Default is NSE (.NS). Standard NSE symbol: e.g. <strong>TCS</strong>, <strong>RELIANCE</strong>. For BSE, append <strong>.BO</strong> (e.g. <strong>BOMDYEING.BO</strong>).</small>
-                                </div>
+                                <label for="stock-company-name">Company Name <span class="required">*</span></label>
+                                <input type="text" id="stock-company-name" placeholder="e.g. Reliance Industries" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="stock-code">Stock Code <span class="required">*</span></label>
+                                <input type="text" id="stock-code" placeholder="e.g. RELIANCE, TCS" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="stock-exchange">Exchange <span class="required">*</span></label>
+                                <select id="stock-exchange" required>
+                                    <option value="NSE" selected>NSE (.NS)</option>
+                                    <option value="BSE">BSE (.BO)</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label for="stock-price">Buying Price (₹) <span class="required">*</span></label>
@@ -198,9 +250,11 @@
                         </div>
                         <div class="excel-format-guide">
                             <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
-                            <p>Your Excel file should contain a sheet with at least these three columns (headers can be case-insensitive):</p>
+                            <p>Your Excel file should contain a sheet with at least these columns (headers can be case-insensitive):</p>
                             <div class="columns-badge-container">
-                                <span class="badge">Stock Name</span>
+                                <span class="badge">Company Name</span>
+                                <span class="badge">Stock Code</span>
+                                <span class="badge">Exchange</span>
                                 <span class="badge">Buying Price</span>
                                 <span class="badge">Quantity</span>
                             </div>
@@ -222,7 +276,10 @@
                                     <button class="btn btn-link btn-back" id="btn-back-dashboard">
                                         <i class="fa-solid fa-arrow-left"></i> Back to Portfolio
                                     </button>
-                                    <h2 id="detail-symbol">RELIANCE.NS</h2>
+                                    <div style="display: flex; align-items: baseline; gap: 15px;">
+                                        <h2 id="detail-symbol" style="margin-bottom: 0;">RELIANCE.NS</h2>
+                                        <h3 id="detail-price" style="margin: 0; color: var(--primary); font-size: 1.6rem; font-weight: 600;">₹0.00</h3>
+                                    </div>
                                     <span class="company-name-placeholder" id="detail-exchange">NSE (India)</span>
                                 </div>
                                 <div class="chart-timeframes">
@@ -355,10 +412,44 @@
         </main>
     </div>
 
+    <!-- Edit Stock Modal -->
+    <div id="edit-stock-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Edit Stock Details</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-edit-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="edit-stock-form" class="form-grid">
+                <!-- Hidden original symbol to know which one we are updating -->
+                <input type="hidden" id="edit-original-symbol">
+                
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="edit-company-name">Company Name <span class="required">*</span></label>
+                    <input type="text" id="edit-company-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-stock-code">Stock Code <span class="required">*</span></label>
+                    <input type="text" id="edit-stock-code" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-exchange">Exchange <span class="required">*</span></label>
+                    <select id="edit-exchange" required>
+                        <option value="NSE">NSE (.NS)</option>
+                        <option value="BSE">BSE (.BO)</option>
+                    </select>
+                </div>
+                <div class="form-actions" style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
+                    <button type="button" class="btn btn-tertiary" id="btn-cancel-edit-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-edit-modal">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Notification Toast System -->
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="app.js"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ load_dotenv()
 ASSETS_DIR = Path("assets")
 EXCEL_PATH = ASSETS_DIR / "stocks.xlsx"
 COMPANY_NAME_CACHE_FILE = ASSETS_DIR / "company_names.json"
-COLUMNS = ["Stock Name", "Buying Price", "Quantity"]
+COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]
 
 def get_company_name(ticker_obj, symbol: str) -> str:
     import json
@@ -52,17 +52,50 @@ def ensure_excel_file():
         print(f"Created default Excel file at {EXCEL_PATH.resolve()}")
 
 def read_stocks() -> pd.DataFrame:
-    """Read stocks from the Excel file."""
+    """Read stocks from the Excel file and auto-migrate legacy format."""
     ensure_excel_file()
     try:
         df = pd.read_excel(EXCEL_PATH)
+        
+        # Legacy migration check: if 'Stock Name' exists but 'Company Name' does not
+        if "Stock Name" in df.columns and "Company Name" not in df.columns:
+            # We are reading an old file. Let's migrate it in memory and then overwrite.
+            df["Company Name"] = df["Stock Name"]
+            df["Stock Code"] = ""
+            df["Exchange"] = ""
+            for i, row in df.iterrows():
+                symbol = str(row["Stock Name"]).strip().upper()
+                if symbol.endswith(".NS"):
+                    df.at[i, "Stock Code"] = symbol[:-3]
+                    df.at[i, "Exchange"] = "NSE"
+                elif symbol.endswith(".BO"):
+                    df.at[i, "Stock Code"] = symbol[:-3]
+                    df.at[i, "Exchange"] = "BSE"
+                else:
+                    df.at[i, "Stock Code"] = symbol
+                    df.at[i, "Exchange"] = "NSE" # Default
+            
+            # Fetch human-readable company names for the legacy entries
+            # We use a dummy object since we don't have ticker_obj here
+            for i, row in df.iterrows():
+                sym = f"{df.at[i, 'Stock Code']}.{'NS' if df.at[i, 'Exchange'] == 'NSE' else 'BO'}"
+                ticker = yf.Ticker(sym)
+                df.at[i, "Company Name"] = get_company_name(ticker, sym)
+
+            # Drop old column and save immediately
+            df = df.drop(columns=["Stock Name"])
+            write_stocks(df) # Will re-read from memory here? Wait, write_stocks takes df. Let's just pass it.
+
         # Ensure correct columns exist
         for col in COLUMNS:
             if col not in df.columns:
                 df[col] = None
-        # Clean data (ensure stock names are uppercase strings, drop rows where all columns are empty)
-        df = df.dropna(subset=["Stock Name"])
-        df["Stock Name"] = df["Stock Name"].astype(str).str.strip().str.upper()
+        
+        # Clean data
+        df = df.dropna(subset=["Stock Code"])
+        df["Company Name"] = df["Company Name"].astype(str).str.strip()
+        df["Stock Code"] = df["Stock Code"].astype(str).str.strip().str.upper()
+        df["Exchange"] = df["Exchange"].astype(str).str.strip().str.upper()
         df["Buying Price"] = pd.to_numeric(df["Buying Price"], errors="coerce").fillna(0.0)
         df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
         return df[COLUMNS]
@@ -80,7 +113,9 @@ def write_stocks(df: pd.DataFrame):
     """
     ensure_excel_file()
     # Format
-    df["Stock Name"] = df["Stock Name"].astype(str).str.strip().str.upper()
+    df["Company Name"] = df["Company Name"].astype(str).str.strip()
+    df["Stock Code"] = df["Stock Code"].astype(str).str.strip().str.upper()
+    df["Exchange"] = df["Exchange"].astype(str).str.strip().str.upper()
     df["Buying Price"] = pd.to_numeric(df["Buying Price"], errors="coerce").fillna(0.0)
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
 
@@ -316,12 +351,18 @@ def get_all_stocks_with_metrics() -> list:
     results = []
     
     for _, row in df.iterrows():
-        symbol = str(row["Stock Name"]).upper()
+        company_name_db = str(row["Company Name"]).strip()
+        stock_code = str(row["Stock Code"]).strip().upper()
+        exchange = str(row["Exchange"]).strip().upper()
         buying_price = float(row["Buying Price"])
         quantity = float(row["Quantity"])
         
+        # Build symbol for yfinance
+        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
+        symbol = f"{stock_code}{suffix}"
+        
         try:
-            current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct, company_name = get_stock_data(symbol)
+            current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct, fetched_company_name = get_stock_data(symbol)
             investment_value = buying_price * quantity
             current_value = current_price * quantity
             gain_loss = current_value - investment_value
@@ -332,7 +373,9 @@ def get_all_stocks_with_metrics() -> list:
                 return None if (isinstance(val, float) and math.isnan(val)) else val
 
             results.append({
-                "company_name": company_name,
+                "company_name": company_name_db or fetched_company_name,
+                "stock_code": stock_code,
+                "exchange": exchange,
                 "symbol": actual_symbol,
                 "buying_price": clean_nan(buying_price),
                 "quantity": clean_nan(quantity),
@@ -354,7 +397,9 @@ def get_all_stocks_with_metrics() -> list:
         except Exception as e:
             # Fallback in case a ticker fetch fails, return it with error details
             results.append({
-                "company_name": symbol,
+                "company_name": company_name_db or stock_code,
+                "stock_code": stock_code,
+                "exchange": exchange,
                 "symbol": symbol,
                 "buying_price": buying_price,
                 "quantity": quantity,
@@ -376,33 +421,20 @@ def get_all_stocks_with_metrics() -> list:
             
     return results
 
-def add_stock(symbol: str, price: float, quantity: float) -> dict:
+def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float) -> dict:
     """
     Add a stock transaction.
     If stock already exists, merge it:
     - New quantity = old_qty + new_qty
     - New average price = (old_price * old_qty + new_price * new_qty) / (old_qty + new_qty)
-    NOTE: Ticker validation via yfinance is intentionally skipped here to keep the
-    operation fast. Live data is fetched lazily when the portfolio is displayed.
     """
-    formatted_symbol = format_symbol(symbol)
     df = read_stocks()
-    symbol_upper = formatted_symbol.upper()
-    
-    # Check if stock exists by base symbol match
-    def get_base(s):
-        s = s.strip().upper()
-        if s.endswith(".NS") or s.endswith(".BO"):
-            s = s.rsplit(".", 1)[0]
-        s = _NSE_SEGMENT_MARKERS.sub("", s)
-        return s
-        
-    req_base = get_base(symbol_upper)
+    stock_code_upper = stock_code.strip().upper()
+    exchange_upper = exchange.strip().upper()
     
     match_idx = None
     for idx, row in df.iterrows():
-        row_base = get_base(str(row["Stock Name"]))
-        if row_base == req_base:
+        if str(row["Stock Code"]).upper() == stock_code_upper and str(row["Exchange"]).upper() == exchange_upper:
             match_idx = idx
             break
     
@@ -418,72 +450,78 @@ def add_stock(symbol: str, price: float, quantity: float) -> dict:
             
         df.loc[match_idx, "Buying Price"] = avg_price
         df.loc[match_idx, "Quantity"] = total_qty
+        # Optionally update company name to the newest provided
+        df.loc[match_idx, "Company Name"] = company_name.strip()
         action = "merged"
-        symbol_upper = df.loc[match_idx, "Stock Name"]
     else:
-        new_row = pd.DataFrame([{"Stock Name": symbol_upper, "Buying Price": price, "Quantity": quantity}])
+        new_row = pd.DataFrame([{
+            "Company Name": company_name.strip(),
+            "Stock Code": stock_code_upper,
+            "Exchange": exchange_upper,
+            "Buying Price": price,
+            "Quantity": quantity
+        }])
         df = pd.concat([df, new_row], ignore_index=True)
         action = "added"
         
     write_stocks(df)
-    return {"symbol": symbol_upper, "action": action}
+    return {"stock_code": stock_code_upper, "action": action}
 
-def update_stock(symbol: str, price: float, quantity: float, new_symbol: str = None) -> dict:
-    """Directly update price and quantity of a stock (and optionally its symbol)."""
-    # First, validate symbol format
-    formatted_symbol = format_symbol(symbol)
+def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None) -> dict:
+    """Directly update price, quantity, and optionally company name, stock code, and exchange."""
+    # Find the stock by its current symbol (Stock Code + Exchange mapped)
+    # Actually, the frontend will pass the symbol as "CODE.EXCHANGE". Let's parse it to find the row.
+    formatted_symbol = format_symbol(symbol).upper()
     df = read_stocks()
-    symbol_upper = formatted_symbol.upper()
-    
-    def get_base(s):
-        s = s.strip().upper()
-        if s.endswith(".NS") or s.endswith(".BO"):
-            s = s.rsplit(".", 1)[0]
-        s = _NSE_SEGMENT_MARKERS.sub("", s)
-        return s
-        
-    req_base = get_base(symbol_upper)
     
     match_idx = None
     for idx, row in df.iterrows():
-        row_base = get_base(str(row["Stock Name"]))
-        if row_base == req_base:
+        stock_code = str(row["Stock Code"]).strip().upper()
+        exchange = str(row["Exchange"]).strip().upper()
+        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
+        row_symbol = f"{stock_code}{suffix}"
+        
+        if format_symbol(row_symbol).upper() == formatted_symbol:
             match_idx = idx
             break
             
     if match_idx is None:
-        raise KeyError(f"Stock '{symbol_upper}' not found in portfolio.")
+        raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
     df.loc[match_idx, "Buying Price"] = price
     df.loc[match_idx, "Quantity"] = quantity
     
-    if new_symbol:
-        formatted_new_symbol = format_symbol(new_symbol)
-        df.loc[match_idx, "Stock Name"] = formatted_new_symbol.upper()
+    if new_company_name:
+        df.loc[match_idx, "Company Name"] = new_company_name.strip()
+    if new_stock_code:
+        df.loc[match_idx, "Stock Code"] = new_stock_code.strip().upper()
+    if new_exchange:
+        df.loc[match_idx, "Exchange"] = new_exchange.strip().upper()
     
     write_stocks(df)
-    return {"symbol": df.loc[match_idx, "Stock Name"], "action": "updated"}
+    return {"stock_code": df.loc[match_idx, "Stock Code"], "action": "updated"}
 
 def delete_stock(symbol: str) -> dict:
     """Delete a stock from the portfolio."""
-    symbol_upper = symbol.strip().upper()
+    formatted_symbol = format_symbol(symbol).upper()
     df = read_stocks()
     
-    def get_base(s):
-        s = s.strip().upper()
-        if s.endswith(".NS") or s.endswith(".BO"):
-            s = s.rsplit(".", 1)[0]
-        s = _NSE_SEGMENT_MARKERS.sub("", s)
-        return s
+    match_mask = pd.Series([False] * len(df))
+    actual_deleted = ""
+    for idx, row in df.iterrows():
+        stock_code = str(row["Stock Code"]).strip().upper()
+        exchange = str(row["Exchange"]).strip().upper()
+        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
+        row_symbol = f"{stock_code}{suffix}"
         
-    req_base = get_base(symbol_upper)
-    
-    match_mask = df["Stock Name"].apply(lambda x: get_base(str(x)) == req_base)
+        if format_symbol(row_symbol).upper() == formatted_symbol:
+            match_mask[idx] = True
+            actual_deleted = row_symbol
+            break
             
     if not match_mask.any():
-        raise KeyError(f"Stock '{symbol_upper}' not found in portfolio.")
+        raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
-    actual_deleted = df[match_mask]["Stock Name"].iloc[0]
     df = df[~match_mask]
     write_stocks(df)
     return {"symbol": actual_deleted, "action": "deleted"}
@@ -506,7 +544,7 @@ def _check_portfolio_writable():
 def merge_uploaded_file(file_path: Path) -> dict:
     """
     Read uploaded Excel, validate headers, and merge stocks into the main portfolio.
-    Expected columns: Stock Name, Buying Price, Quantity.
+    Expected columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.
     Handles extra/unnamed index columns and fuzzy column name matching.
     """
     # Fail fast with a helpful message if the portfolio file is currently locked
@@ -517,15 +555,20 @@ def merge_uploaded_file(file_path: Path) -> dict:
     except Exception as e:
         raise ValueError(f"Could not parse uploaded file: {e}")
 
-    # Drop fully unnamed/index columns (e.g. 'Unnamed: 0') that pandas adds when
-    # the Excel file was saved with the DataFrame index included.
+    # Drop fully unnamed/index columns
     up_df = up_df.loc[:, ~up_df.columns.str.match(r'^Unnamed')]
 
     # Step 1: Try exact (case-insensitive) header matches first
     exact_map = {
-        "stock name": "Stock Name",
-        "ticker": "Stock Name",
-        "symbol": "Stock Name",
+        "company name": "Company Name",
+        "company": "Company Name",
+        "stock code": "Stock Code",
+        "stock": "Stock Code",
+        "ticker": "Stock Code",
+        "symbol": "Stock Code",
+        "code": "Stock Code",
+        "exchange": "Exchange",
+        "market": "Exchange",
         "buying price": "Buying Price",
         "buy price": "Buying Price",
         "price": "Buying Price",
@@ -542,40 +585,44 @@ def merge_uploaded_file(file_path: Path) -> dict:
         if col_clean in exact_map:
             headers_map[col] = exact_map[col_clean]
 
-    # Step 2: For any required field still missing, fall back to keyword fuzzy search
-    resolved = set(headers_map.values())
-    for col in up_df.columns:
-        if col in headers_map:
-            continue  # already mapped
-        col_clean = str(col).strip().lower()
-        if "Stock Name" not in resolved:
-            if "stock" in col_clean or "ticker" in col_clean:
-                headers_map[col] = "Stock Name"
-                resolved.add("Stock Name")
-        if "Buying Price" not in resolved:
-            if "price" in col_clean or "buy" in col_clean:
-                headers_map[col] = "Buying Price"
-                resolved.add("Buying Price")
-        if "Quantity" not in resolved:
-            if "qty" in col_clean or "quantity" in col_clean or "share" in col_clean:
-                headers_map[col] = "Quantity"
-                resolved.add("Quantity")
-
-    # Validate all required fields were resolved
-    required_fields = ["Stock Name", "Buying Price", "Quantity"]
+    # Validate required fields
+    required_fields = ["Stock Code", "Buying Price", "Quantity"]
+    for f in required_fields:
+        if f not in headers_map.values():
+            # Attempt fuzzy match as fallback
+            for col in up_df.columns:
+                if col in headers_map:
+                    continue
+                col_clean = str(col).strip().lower()
+                if f == "Stock Code" and ("stock" in col_clean or "ticker" in col_clean or "name" in col_clean):
+                    headers_map[col] = "Stock Code"
+                    break
+                if f == "Buying Price" and ("price" in col_clean or "buy" in col_clean):
+                    headers_map[col] = "Buying Price"
+                    break
+                if f == "Quantity" and ("qty" in col_clean or "quantity" in col_clean or "share" in col_clean):
+                    headers_map[col] = "Quantity"
+                    break
+                    
     for f in required_fields:
         if f not in headers_map.values():
             raise ValueError(
                 f"Uploaded file missing required column: '{f}'. "
                 f"Columns found: {list(up_df.columns)}. "
-                f"Expected columns: 'Stock Name', 'Buying Price', 'Quantity'."
             )
 
-    # Rename and filter to only required columns
+    # Rename and filter
     up_df = up_df.rename(columns=headers_map)
-    up_df = up_df[required_fields].dropna(subset=["Stock Name"])
-    # Drop rows where Stock Name is empty or whitespace
-    up_df = up_df[up_df["Stock Name"].astype(str).str.strip() != ""]
+    
+    # Add optional columns if missing
+    if "Company Name" not in up_df.columns:
+        up_df["Company Name"] = up_df["Stock Code"]
+    if "Exchange" not in up_df.columns:
+        up_df["Exchange"] = "NSE"
+        
+    required_cols = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]
+    up_df = up_df[required_cols].dropna(subset=["Stock Code"])
+    up_df = up_df[up_df["Stock Code"].astype(str).str.strip() != ""]
 
     # Merge rows into portfolio
     merged_count = 0
@@ -584,33 +631,32 @@ def merge_uploaded_file(file_path: Path) -> dict:
     skipped_details = []
 
     for _, row in up_df.iterrows():
-        raw_symbol = str(row["Stock Name"]).strip()
-        if not raw_symbol or raw_symbol.lower() == "nan":
+        c_code = str(row["Stock Code"]).strip().upper()
+        if not c_code or c_code.lower() == "nan":
             continue
 
         try:
-            fmt_sym = format_symbol(raw_symbol)
+            c_name = str(row["Company Name"]).strip()
+            c_exch = str(row["Exchange"]).strip().upper()
             price = float(row["Buying Price"])
             qty = float(row["Quantity"])
 
             if price <= 0 or qty <= 0:
                 raise ValueError("Price and quantity must be positive numbers.")
 
-            res = add_stock(fmt_sym, price, qty)
+            res = add_stock(c_name, c_code, c_exch, price, qty)
             if res["action"] == "merged":
                 merged_count += 1
             else:
                 added_count += 1
         except PermissionError:
-            # Provide a clear, actionable message when stocks.xlsx is locked
             skipped_count += 1
             skipped_details.append(
-                f"{raw_symbol}: Could not save — 'stocks.xlsx' is locked. "
-                f"Please close the file in Excel and try uploading again."
+                f"{c_code}: Could not save — 'stocks.xlsx' is locked. "
             )
         except Exception as err:
             skipped_count += 1
-            skipped_details.append(f"{raw_symbol}: {err}")
+            skipped_details.append(f"{c_code}: {err}")
 
     return {
         "added": added_count,
@@ -688,4 +734,33 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
 
     except Exception as e:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
+
+def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str) -> dict:
+    """Update only the metadata of a stock."""
+    formatted_symbol = format_symbol(symbol).upper()
+    df = read_stocks()
+    
+    match_idx = None
+    for idx, row in df.iterrows():
+        stock_code = str(row["Stock Code"]).strip().upper()
+        exchange = str(row["Exchange"]).strip().upper()
+        suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
+        row_symbol = f"{stock_code}{suffix}"
+        
+        if format_symbol(row_symbol).upper() == formatted_symbol:
+            match_idx = idx
+            break
+            
+    if match_idx is None:
+        raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
+        
+    if new_company_name:
+        df.loc[match_idx, "Company Name"] = new_company_name.strip()
+    if new_stock_code:
+        df.loc[match_idx, "Stock Code"] = new_stock_code.strip().upper()
+    if new_exchange:
+        df.loc[match_idx, "Exchange"] = new_exchange.strip().upper()
+    
+    write_stocks(df)
+    return {"status": "success", "message": f"Stock {formatted_symbol} details updated successfully."}
 

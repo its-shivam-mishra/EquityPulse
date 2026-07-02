@@ -14,7 +14,8 @@ from app.services import (
     update_stock,
     delete_stock,
     merge_uploaded_file,
-    send_portfolio_email
+    send_portfolio_email,
+    update_stock_details
 )
 from app.pdf_generator import generate_portfolio_pdf
 
@@ -42,14 +43,23 @@ def startup_event():
 
 # Pydantic Schemas for Requests
 class StockTransaction(BaseModel):
-    symbol: str = Field(..., description="Stock symbol (e.g. RELIANCE, TCS.NS)")
+    company_name: str = Field(..., description="Human readable company name")
+    stock_code: str = Field(..., description="Base ticker symbol (e.g. RELIANCE, TCS)")
+    exchange: str = Field(..., description="Exchange abbreviation (e.g. NSE, BSE)")
     price: float = Field(..., gt=0, description="Purchase price per share")
     quantity: float = Field(..., gt=0, description="Quantity of shares purchased")
 
+class StockDetailsUpdateData(BaseModel):
+    company_name: str = Field(..., description="New company name")
+    stock_code: str = Field(..., description="New base ticker symbol")
+    exchange: str = Field(..., description="New exchange")
+
 class StockUpdateData(BaseModel):
+    company_name: str = Field(..., description="New company name")
+    stock_code: str = Field(..., description="New base ticker symbol")
+    exchange: str = Field(..., description="New exchange")
     price: float = Field(..., gt=0, description="New average buying price per share")
     quantity: float = Field(..., gt=0, description="New quantity of shares")
-    new_symbol: Optional[str] = Field(None, description="Optional new symbol to rename to")
 
 # API Endpoints
 @app.get("/api/stocks")
@@ -68,7 +78,13 @@ def create_stock_transaction(transaction: StockTransaction):
     increases quantity and calculates weighted average buying price.
     """
     try:
-        result = add_stock(transaction.symbol, transaction.price, transaction.quantity)
+        result = add_stock(
+            company_name=transaction.company_name,
+            stock_code=transaction.stock_code,
+            exchange=transaction.exchange,
+            price=transaction.price,
+            quantity=transaction.quantity
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -117,9 +133,20 @@ def get_history(symbol: str, period: str = "1y"):
 
 @app.put("/api/stocks/{symbol}")
 def update_stock_transaction(symbol: str, data: StockUpdateData):
-    """Directly update price and quantity of a stock in the Excel sheet."""
+    """Directly update price, quantity, and metadata of a stock in the Excel sheet."""
     try:
-        result = update_stock(symbol, data.price, data.quantity, data.new_symbol)
+        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange)
+        return result
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.put("/api/stocks/{symbol}/details")
+def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData):
+    """Update only the details (name, code, exchange) of a stock."""
+    try:
+        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
