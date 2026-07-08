@@ -20,7 +20,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="auth.css">
     <style id="modal-styles">
         .modal-overlay {
             position: fixed;
@@ -54,19 +55,56 @@
     </style>
 </head>
 <body>
+    <!-- Auth Container -->
+    <div id="auth-container" class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <img src="logo.png" alt="EquityPulse Logo" class="auth-logo">
+                <h2>Welcome to EquityPulse</h2>
+                <p>Sign in to manage your portfolio</p>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Sign In</button>
+                <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Register</a></p>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="auth-form hidden">
+                <div class="form-group">
+                    <label>Choose Username</label>
+                    <input type="text" id="register-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Choose Password</label>
+                    <input type="password" id="register-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Sign Up</button>
+                <p class="auth-switch">Already have an account? <a href="#" id="show-login">Sign In</a></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="main-app" style="display: none;">
     <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="logo-area" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <div style="display: flex; align-items: center; gap: 0.75rem;" class="brand-group">
-                    <i class="fa-solid fa-chart-line pulse-logo"></i>
+        <!-- Top Navigation -->
+        <nav class="top-nav">
+            <div class="logo-area">
+                <div class="brand-group">
+                    <img src="logo.png" alt="EquityPulse Logo" class="pulse-logo-img">
                     <h2 class="brand-text">EquityPulse</h2>
                 </div>
-                <button id="sidebar-toggle" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 0;">
-                    <i class="fa-solid fa-angles-left"></i>
-                </button>
             </div>
-            <nav class="nav-menu">
+            <div class="nav-menu">
                 <button class="nav-item active" data-target="dashboard-view" id="nav-dashboard">
                     <i class="fa-solid fa-wallet"></i>
                     <span>My Portfolio</span>
@@ -79,14 +117,17 @@
                     <i class="fa-solid fa-file-excel"></i>
                     <span>Import Excel</span>
                 </button>
-            </nav>
-            <div class="sidebar-footer">
+            </div>
+            <div class="nav-footer">
                 <div class="exchange-tag">
                     <i class="fa-solid fa-circle-info"></i>
                     <span>NSE & BSE Market Only</span>
                 </div>
+                <button id="btn-logout" class="btn btn-secondary" style="margin-left: 1rem;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
             </div>
-        </aside>
+        </nav>
 
         <!-- Main Content Area -->
         <main class="main-content">
@@ -450,6 +491,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="app.js?v=6"></script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

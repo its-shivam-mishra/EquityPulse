@@ -66,20 +66,23 @@ body {
 /* Layout container */
 .app-container {
     display: flex;
+    flex-direction: column;
     min-height: 100vh;
 }
 
-/* Sidebar Styling */
-.sidebar {
-    width: 260px;
+/* Top Navigation Styling */
+.top-nav {
+    width: 100%;
     background: rgba(15, 23, 42, 0.8);
-    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(20px);
     display: flex;
-    flex-direction: column;
-    padding: 2rem 1.5rem;
-    position: fixed;
-    height: 100vh;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2.5rem;
+    position: sticky;
+    top: 0;
     z-index: 100;
 }
 
@@ -87,15 +90,19 @@ body {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 3rem;
 }
 
-.pulse-logo {
-    font-size: 1.75rem;
-    background: linear-gradient(135deg, #818cf8, #4f46e5);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+.brand-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pulse-logo-img {
+    height: 32px;
+    width: auto;
     filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.4));
+    border-radius: 6px;
 }
 
 .logo-area h2 {
@@ -103,13 +110,13 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.5px;
+    margin: 0;
 }
 
 .nav-menu {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.5rem;
-    flex-grow: 1;
 }
 
 .nav-item {
@@ -124,10 +131,9 @@ body {
     border-radius: 12px;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    text-align: left;
 }
 
 .nav-item i {
@@ -140,10 +146,6 @@ body {
     background: rgba(255, 255, 255, 0.04);
 }
 
-.nav-item:hover i {
-    transform: translateX(2px);
-}
-
 .nav-item.active {
     color: var(--text-main);
     background: var(--primary);
@@ -154,9 +156,9 @@ body {
     color: #fff;
 }
 
-.sidebar-footer {
-    border-top: 1px solid var(--border-color);
-    padding-top: 1.5rem;
+.nav-footer {
+    display: flex;
+    align-items: center;
 }
 
 .exchange-tag {
@@ -178,9 +180,9 @@ body {
 /* Main Content Area */
 .main-content {
     flex-grow: 1;
-    margin-left: 260px;
     padding: 2.5rem;
-    max-width: calc(100vw - 260px);
+    width: 100%;
+    max-width: 100vw;
 }
 
 /* Header & Badges */

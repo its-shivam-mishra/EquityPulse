@@ -1,10 +1,13 @@
 import shutil
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Body
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
+import jwt
+from datetime import datetime, timedelta
 
 from app.services import (
     ensure_excel_file,
@@ -36,26 +39,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def startup_event():
+
+# Auth setup
+SECRET_KEY = "equitypulse_secret"
+ALGORITHM = "HS256"
+security = HTTPBearer()
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=7)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return username
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+class UserAuth(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/register")
+def register(user: UserAuth):
     from app.cosmos_service import cosmos_service
-    # Initializes Cosmos DB on module load
-    _ = cosmos_service.get_all_stocks()
-    
-    # Migrate data from Excel if Cosmos DB is empty
-    from pathlib import Path
-    import pandas as pd
-    excel_path = Path("assets/stocks.xlsx")
-    if excel_path.exists():
-        try:
-            items = cosmos_service.get_all_stocks()
-            if not items:
-                df = pd.read_excel(excel_path)
-                from app.services import write_stocks
-                write_stocks(df)
-                print("Migrated existing Excel data to Cosmos DB.")
-        except Exception as e:
-            print(f"Error during migration check: {e}")
+    existing = cosmos_service.get_user(user.username)
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    cosmos_service.create_user(user.username, user.password)
+    token = create_access_token(data={"sub": user.username})
+    return {"access_token": token, "token_type": "bearer", "username": user.username}
+
+@app.post("/api/auth/login")
+def login(user: UserAuth):
+    from app.cosmos_service import cosmos_service
+    db_user = cosmos_service.get_user(user.username)
+    if not db_user or db_user.get("password") != user.password:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    token = create_access_token(data={"sub": user.username})
+    return {"access_token": token, "token_type": "bearer", "username": user.username}
 
 # Pydantic Schemas for Requests
 class StockTransaction(BaseModel):
@@ -79,15 +106,15 @@ class StockUpdateData(BaseModel):
 
 # API Endpoints
 @app.get("/api/stocks")
-def get_stocks():
+def get_stocks(username: str = Depends(get_current_user)):
     """Retrieve all stocks from portfolio with current prices and SMAs."""
     try:
-        return get_all_stocks_with_metrics()
+        return get_all_stocks_with_metrics(username)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock list: {e}")
 
 @app.post("/api/stocks")
-def create_stock_transaction(transaction: StockTransaction):
+def create_stock_transaction(transaction: StockTransaction, username: str = Depends(get_current_user)):
     """
     Add a new stock transaction.
     If the stock already exists, it merges the transaction:
@@ -99,7 +126,8 @@ def create_stock_transaction(transaction: StockTransaction):
             stock_code=transaction.stock_code,
             exchange=transaction.exchange,
             price=transaction.price,
-            quantity=transaction.quantity
+            quantity=transaction.quantity,
+            username=username
         )
         return result
     except ValueError as e:
@@ -108,7 +136,7 @@ def create_stock_transaction(transaction: StockTransaction):
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.post("/api/stocks/upload")
-def upload_excel(file: UploadFile = File(...)):
+def upload_excel(file: UploadFile = File(...), username: str = Depends(get_current_user)):
     """Upload an Excel file to merge new stocks into the portfolio."""
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are allowed.")
@@ -123,7 +151,7 @@ def upload_excel(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
             
         # Parse and merge
-        result = merge_uploaded_file(temp_file_path)
+        result = merge_uploaded_file(temp_file_path, username)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -135,7 +163,7 @@ def upload_excel(file: UploadFile = File(...)):
             temp_file_path.unlink()
 
 @app.get("/api/stocks/{symbol}/history")
-def get_history(symbol: str, period: str = "1y"):
+def get_history(symbol: str, period: str = "1y", username: str = Depends(get_current_user)):
     """Fetch historical prices and SMA markers for plotting a stock chart."""
     valid_periods = ["1mo", "3mo", "6mo", "1y", "2y", "5y"]
     if period not in valid_periods:
@@ -148,10 +176,10 @@ def get_history(symbol: str, period: str = "1y"):
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {e}")
 
 @app.put("/api/stocks/{symbol}")
-def update_stock_transaction(symbol: str, data: StockUpdateData):
+def update_stock_transaction(symbol: str, data: StockUpdateData, username: str = Depends(get_current_user)):
     """Directly update price, quantity, and metadata of a stock in the Excel sheet."""
     try:
-        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange)
+        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -159,10 +187,10 @@ def update_stock_transaction(symbol: str, data: StockUpdateData):
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.put("/api/stocks/{symbol}/details")
-def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData):
+def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, username: str = Depends(get_current_user)):
     """Update only the details (name, code, exchange) of a stock."""
     try:
-        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange)
+        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -170,10 +198,10 @@ def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData):
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.delete("/api/stocks/{symbol}")
-def remove_stock(symbol: str):
+def remove_stock(symbol: str, username: str = Depends(get_current_user)):
     """Remove a stock from the portfolio."""
     try:
-        result = delete_stock(symbol)
+        result = delete_stock(symbol, username)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -182,14 +210,14 @@ def remove_stock(symbol: str):
 
 
 @app.post("/api/report/email")
-def email_portfolio_report(background_tasks: BackgroundTasks = None):
+def email_portfolio_report(background_tasks: BackgroundTasks = None, username: str = Depends(get_current_user)):
     """
     Generate the portfolio PDF report and send it to the default recipient from .env.
     """
     try:
         
         # 1. Fetch current stock data
-        stocks_data = get_all_stocks_with_metrics()
+        stocks_data = get_all_stocks_with_metrics(username)
         if not stocks_data:
             raise HTTPException(status_code=400, detail="Portfolio is empty. Please add stocks before generating a report.")
             

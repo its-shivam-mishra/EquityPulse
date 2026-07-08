@@ -51,11 +51,11 @@ def ensure_excel_file():
         df.to_excel(EXCEL_PATH, index=False)
         print(f"Created default Excel file at {EXCEL_PATH.resolve()}")
 
-def read_stocks() -> pd.DataFrame:
-    """Read stocks from Cosmos DB."""
+def read_stocks(username: str) -> pd.DataFrame:
+    """Read stocks from Cosmos DB for a specific user."""
     from app.cosmos_service import cosmos_service
     try:
-        items = cosmos_service.get_all_stocks()
+        items = cosmos_service.get_all_stocks(username)
         if not items:
             return pd.DataFrame(columns=COLUMNS)
             
@@ -78,8 +78,8 @@ def read_stocks() -> pd.DataFrame:
         print(f"Error reading from Cosmos DB: {e}")
         return pd.DataFrame(columns=COLUMNS)
 
-def write_stocks(df: pd.DataFrame):
-    """Write DataFrame of stocks back to Cosmos DB."""
+def write_stocks(df: pd.DataFrame, username: str):
+    """Write DataFrame of stocks back to Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     # Format
     df["Company Name"] = df["Company Name"].astype(str).str.strip()
@@ -102,7 +102,7 @@ def write_stocks(df: pd.DataFrame):
             "Buying Price": row["Buying Price"],
             "Quantity": row["Quantity"]
         }
-        cosmos_service.upsert_stock(stock_item)
+        cosmos_service.upsert_stock(stock_item, username)
 
 # NSE trade-segment suffixes that Yahoo Finance does not recognise.
 # These are administrative markers (Trade-to-Trade, suspended, SME, etc.)
@@ -313,9 +313,9 @@ def get_stock_history(symbol: str, period: str = "1y"):
         "symbol": formatted_symbol
     }
 
-def get_all_stocks_with_metrics() -> list:
-    """Read stocks from Excel and enrich with real-time yfinance metrics."""
-    df = read_stocks()
+def get_all_stocks_with_metrics(username: str) -> list:
+    """Read stocks from Cosmos DB and enrich with real-time yfinance metrics."""
+    df = read_stocks(username)
     results = []
     
     for _, row in df.iterrows():
@@ -389,17 +389,22 @@ def get_all_stocks_with_metrics() -> list:
             
     return results
 
-def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float) -> dict:
+def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float, username: str) -> dict:
     """
-    Add a stock transaction directly to Cosmos DB.
+    Add a stock transaction directly to Cosmos DB for a user.
     """
     from app.cosmos_service import cosmos_service
     stock_code_upper = stock_code.strip().upper()
     exchange_upper = exchange.strip().upper()
     suffix = ".NS" if exchange_upper == "NSE" else ".BO" if exchange_upper == "BSE" else ""
-    symbol = f"{stock_code_upper}{suffix}"
+    raw_symbol = f"{stock_code_upper}{suffix}"
+    symbol = format_symbol(raw_symbol)
     
-    existing = cosmos_service.get_stock(symbol, exchange_upper)
+    # Extract the base stock code after formatting (e.g., removing -SM)
+    stock_code_upper = symbol.rsplit(".", 1)[0] if "." in symbol else symbol
+
+    
+    existing = cosmos_service.get_stock(symbol, exchange_upper, username)
     if existing:
         old_price = float(existing.get("Buying Price", 0))
         old_qty = float(existing.get("Quantity", 0))
@@ -410,7 +415,7 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
         existing["Buying Price"] = avg_price
         existing["Quantity"] = total_qty
         existing["Company Name"] = company_name.strip()
-        cosmos_service.upsert_stock(existing)
+        cosmos_service.upsert_stock(existing, username)
         action = "merged"
     else:
         new_item = {
@@ -421,18 +426,18 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
             "Quantity": quantity,
             "id": symbol
         }
-        cosmos_service.upsert_stock(new_item)
+        cosmos_service.upsert_stock(new_item, username)
         action = "added"
         
     return {"stock_code": stock_code_upper, "action": action}
 
-def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None) -> dict:
-    """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB."""
+def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None) -> dict:
+    """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    existing = cosmos_service.get_stock(formatted_symbol, exchange)
+    existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
             
     if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
@@ -453,23 +458,23 @@ def update_stock(symbol: str, price: float, quantity: float, new_company_name: s
             existing["Exchange"] = new_exchange.strip().upper()
             
         new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
-        new_id = f"{existing['Stock Code']}{new_suffix}"
+        new_id = f"{username}_{existing['Stock Code']}{new_suffix}"
         existing["id"] = new_id
         
-        cosmos_service.delete_stock(old_id, old_exchange)
-        cosmos_service.upsert_stock(existing)
+        cosmos_service.delete_stock(old_id, old_exchange, username)
+        cosmos_service.upsert_stock(existing, username)
     else:
-        cosmos_service.upsert_stock(existing)
+        cosmos_service.upsert_stock(existing, username)
     
     return {"stock_code": existing["Stock Code"], "action": "updated"}
 
-def delete_stock(symbol: str) -> dict:
-    """Delete a stock from Cosmos DB."""
+def delete_stock(symbol: str, username: str) -> dict:
+    """Delete a stock from Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    success = cosmos_service.delete_stock(formatted_symbol, exchange)
+    success = cosmos_service.delete_stock(formatted_symbol, exchange, username)
     if not success:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
@@ -480,7 +485,7 @@ def _check_portfolio_writable():
     pass
 
 
-def merge_uploaded_file(file_path: Path) -> dict:
+def merge_uploaded_file(file_path: Path, username: str) -> dict:
     """
     Read uploaded Excel, validate headers, and merge stocks into the main portfolio.
     Expected columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.
@@ -583,7 +588,7 @@ def merge_uploaded_file(file_path: Path) -> dict:
             if price <= 0 or qty <= 0:
                 raise ValueError("Price and quantity must be positive numbers.")
 
-            res = add_stock(c_name, c_code, c_exch, price, qty)
+            res = add_stock(c_name, c_code, c_exch, price, qty, username)
             if res["action"] == "merged":
                 merged_count += 1
             else:
@@ -674,13 +679,13 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
     except Exception as e:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
 
-def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str) -> dict:
-    """Update only the metadata of a stock in Cosmos DB."""
+def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str) -> dict:
+    """Update only the metadata of a stock in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    existing = cosmos_service.get_stock(formatted_symbol, exchange)
+    existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
     if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
@@ -697,13 +702,13 @@ def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str
             existing["Exchange"] = new_exchange.strip().upper()
             
         new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
-        new_id = f"{existing['Stock Code']}{new_suffix}"
+        new_id = f"{username}_{existing['Stock Code']}{new_suffix}"
         existing["id"] = new_id
         
-        cosmos_service.delete_stock(old_id, old_exchange)
-        cosmos_service.upsert_stock(existing)
+        cosmos_service.delete_stock(old_id, old_exchange, username)
+        cosmos_service.upsert_stock(existing, username)
     else:
-        cosmos_service.upsert_stock(existing)
+        cosmos_service.upsert_stock(existing, username)
     
     return {"status": "success", "message": f"Stock {formatted_symbol} details updated successfully."}
 

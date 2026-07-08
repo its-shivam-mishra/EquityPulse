@@ -5,8 +5,59 @@ let historyChartInstance = null;
 let isValuesMasked = true;
 let hiddenColumns = new Set([5, 6, 8]); // Default hide Investment and Current Value columns
 
+// Auth state
+let authToken = localStorage.getItem("auth_token");
+
+// Intercept fetch to add token and handle 401
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    let [resource, config] = args;
+    
+    // If resource is a Request object, we need to clone it or modify its headers
+    if (resource instanceof Request) {
+        if (authToken && !resource.headers.has('Authorization')) {
+            resource.headers.set('Authorization', `Bearer ${authToken}`);
+        }
+        const response = await originalFetch(resource, config);
+        if (response.status === 401) handleLogout();
+        return response;
+    }
+
+    // Normal string URL
+    if (!config) config = {};
+    if (!config.headers) config.headers = {};
+    
+    if (config.headers instanceof Headers) {
+        if (authToken && !config.headers.has('Authorization')) {
+            config.headers.append('Authorization', `Bearer ${authToken}`);
+        }
+    } else {
+        if (authToken && !config.headers['Authorization']) {
+            config.headers['Authorization'] = `Bearer ${authToken}`;
+        }
+    }
+    
+    const response = await originalFetch(resource, config);
+    if (response.status === 401) {
+        handleLogout();
+    }
+    return response;
+};
+
 // Initialize when DOM is fully loaded
 document.addEventListener("DOMContentLoaded", () => {
+    initAuth();
+    if (authToken) {
+        document.getElementById("main-app").style.display = "block";
+        document.getElementById("auth-container").classList.add("hidden");
+        initApp();
+    } else {
+        document.getElementById("main-app").style.display = "none";
+        document.getElementById("auth-container").classList.remove("hidden");
+    }
+});
+
+function initApp() {
     initNavigation();
     initStocks();
     initForms();
@@ -14,15 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initDetails();
     initMaskToggle();
     initColumnVisibility();
-    // Sidebar Toggle
-    const sidebarToggle = document.getElementById("sidebar-toggle");
-    const appContainer = document.querySelector(".app-container");
-    if (sidebarToggle && appContainer) {
-        sidebarToggle.addEventListener("click", () => {
-            appContainer.classList.toggle("sidebar-closed");
-        });
-    }
-});
+}
 
 function initMaskToggle() {
     const icon = document.getElementById("toggle-mask-icon");
@@ -697,8 +740,8 @@ function activateInlineEdit(cell) {
     input.className = "inline-edit-input";
     input.value = isQty ? rawValue : rawValue.toFixed(4);
 
-    input.step = isQty ? "1" : "0.01";
-    input.min = isQty ? "1" : "0.01";
+    input.step = "any";
+    input.min = isQty ? "0.0001" : "0.01";
     input.setAttribute("data-original", input.value);
 
     // Save button
