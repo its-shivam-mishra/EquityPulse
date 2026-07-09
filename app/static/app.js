@@ -3,7 +3,7 @@ let currentSymbol = null;
 let currentPeriod = "1y";
 let historyChartInstance = null;
 let isValuesMasked = true;
-let hiddenColumns = new Set([5, 6, 8]); // Default hide Investment and Current Value columns
+let hiddenColumns = new Set([5, 6, 8, 9]); // Default hide Investment, Current Value, and Tag columns
 
 // Auth state
 let authToken = localStorage.getItem("auth_token");
@@ -57,7 +57,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+let _appInitialized = false;
+
 function initApp() {
+    if (_appInitialized) {
+        fetchAndRenderStocks();
+        return;
+    }
+    _appInitialized = true;
+
     initNavigation();
     initStocks();
     initForms();
@@ -91,6 +99,8 @@ function initColumnVisibility() {
 
     if (!btn || !dropdown || !list) return;
 
+    list.innerHTML = ""; // Clear list to prevent duplicates on re-initialization
+
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
         dropdown.classList.toggle("hidden");
@@ -104,7 +114,7 @@ function initColumnVisibility() {
 
     const headers = document.querySelectorAll("#stock-list-table th");
     headers.forEach((th, index) => {
-        if (index === 0 || index === 1 || index === 10) return;
+        if (index === 0 || index === 1 || index === 10 || index === 11) return;
 
         let label = th.textContent.replace("SMA Status (20/50/100/200)", "SMA Status").trim();
 
@@ -237,6 +247,14 @@ let _currentStocksData = [];
 let _currentSortColumn = null;
 let _currentSortDirection = "asc";
 
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
 function initStocks() {
     fetchAndRenderStocks();
 
@@ -261,6 +279,12 @@ function initStocks() {
             fetchAndRenderStocks();
             showToast("Refreshing live market data...", "info");
         });
+    }
+
+    // Search Bar
+    const searchInput = document.getElementById("stock-search");
+    if (searchInput) {
+        searchInput.addEventListener("input", debounce(applyCurrentSortAndRender, 300));
     }
 }
 
@@ -290,6 +314,19 @@ async function fetchAndRenderStocks() {
 
 function applyCurrentSortAndRender() {
     let data = [..._currentStocksData];
+    
+    // Search filtering
+    const searchInput = document.getElementById("stock-search");
+    if (searchInput && searchInput.value) {
+        const query = searchInput.value.toLowerCase().trim();
+        data = data.filter(s => {
+            const name = (s.company_name || "").toLowerCase();
+            const code = (s.stock_code || "").toLowerCase();
+            const tag = (s.tag || "").toLowerCase();
+            return name.includes(query) || code.includes(query) || tag.includes(query);
+        });
+    }
+    
     if (_currentSortColumn) {
         data.sort((a, b) => {
             let valA = a[_currentSortColumn];
@@ -423,7 +460,7 @@ function renderStocksTable(stocks) {
             <td>
                 <div class="ticker-cell">
                     <div class="symbol-title-row">
-                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" title="Click to edit details">
+                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" data-tag="${stock.tag || ''}" title="Click to edit details">
                             <span class="symbol-text editable-display">${displayTitle}</span>
                             <i class="fa-solid fa-pen-to-square edit-pencil"></i>
                         </div>
@@ -460,6 +497,9 @@ function renderStocksTable(stocks) {
             <td class="text-right ${gainLossClass}">
                 <div>${gainLossText}</div>
                 <div style="font-size: 0.78rem; margin-top: 0.15rem;">${gainLossPctText}</div>
+            </td>
+            <td class="text-center">
+                ${stock.tag ? `<span class="tag-pill">${stock.tag}</span>` : `<span class="text-muted" style="opacity: 0.5;">-</span>`}
             </td>
             <td class="text-center">
                 <div class="indicator-tags">${smaBadges}</div>
@@ -519,28 +559,20 @@ function openEditStockModal(cell) {
     const stockCode = cell.dataset.stockCode;
     const exchange = cell.dataset.exchange;
     const companyName = cell.dataset.companyName;
+    const tag = cell.dataset.tag;
 
-    // Find price and quantity from the row
-    const row = cell.closest("tr");
-    const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
-    const priceCell = row.querySelector(".editable-cell[data-field='price']");
+    // Fill Modal Form
+    document.getElementById("edit-original-symbol").value = symbol;
+    document.getElementById("edit-company-name").value = companyName || "";
+    document.getElementById("edit-stock-code").value = stockCode || "";
+    document.getElementById("edit-stock-tag").value = tag || "";
 
-    const qty = qtyCell ? qtyCell.dataset.value : "";
-    const price = priceCell ? priceCell.dataset.value : "";
-
-    // Fill Add/Update Stock Form
-    document.getElementById("stock-company-name").value = companyName || "";
-    document.getElementById("stock-code").value = stockCode || "";
-
-    const exSelect = document.getElementById("stock-exchange");
+    const exSelect = document.getElementById("edit-exchange");
     if (exchange === "BSE") exSelect.value = "BSE";
     else exSelect.value = "NSE";
 
-    document.getElementById("stock-price").value = price;
-    document.getElementById("stock-qty").value = qty;
-
-    // Switch to Add View
-    switchView("add-view");
+    // Show Modal
+    document.getElementById("edit-stock-modal").classList.remove("hidden");
 }
 
 function closeEditStockModal() {
@@ -574,13 +606,15 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
 
     const currentQty = parseFloat(qtyCell.dataset.value);
     const currentPrice = parseFloat(priceCell.dataset.value);
+    const newTag = document.getElementById("edit-stock-tag").value.trim();
 
     const requestBody = {
         price: currentPrice,
         quantity: currentQty,
         company_name: newCompanyName,
         stock_code: newStockCode,
-        exchange: newExchange
+        exchange: newExchange,
+        tag: newTag || null
     };
 
     const saveBtn = document.getElementById("btn-save-edit-modal");
@@ -897,6 +931,7 @@ function initForms() {
         const exchange = document.getElementById("stock-exchange").value;
         const price = parseFloat(document.getElementById("stock-price").value);
         const qty = parseFloat(document.getElementById("stock-qty").value);
+        const tag = document.getElementById("stock-tag").value.trim();
 
         const submitBtn = document.getElementById("btn-submit-stock");
         const originalBtnHTML = submitBtn.innerHTML;
@@ -909,7 +944,7 @@ function initForms() {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ company_name: companyName, stock_code: stockCode, exchange: exchange, price, quantity: qty })
+                body: JSON.stringify({ company_name: companyName, stock_code: stockCode, exchange: exchange, price, quantity: qty, tag: tag || null })
             });
 
             if (!response.ok) {

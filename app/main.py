@@ -91,11 +91,13 @@ class StockTransaction(BaseModel):
     exchange: str = Field(..., description="Exchange abbreviation (e.g. NSE, BSE)")
     price: float = Field(..., gt=0, description="Purchase price per share")
     quantity: float = Field(..., gt=0, description="Quantity of shares purchased")
+    tag: Optional[str] = Field(None, description="Optional tag (e.g. Tech, Core)")
 
 class StockDetailsUpdateData(BaseModel):
     company_name: str = Field(..., description="New company name")
     stock_code: str = Field(..., description="New base ticker symbol")
     exchange: str = Field(..., description="New exchange")
+    tag: Optional[str] = Field(None, description="New tag")
 
 class StockUpdateData(BaseModel):
     company_name: str = Field(..., description="New company name")
@@ -103,6 +105,7 @@ class StockUpdateData(BaseModel):
     exchange: str = Field(..., description="New exchange")
     price: float = Field(..., gt=0, description="New average buying price per share")
     quantity: float = Field(..., gt=0, description="New quantity of shares")
+    tag: Optional[str] = Field(None, description="New tag")
 
 # API Endpoints
 @app.get("/api/stocks")
@@ -127,7 +130,8 @@ def create_stock_transaction(transaction: StockTransaction, username: str = Depe
             exchange=transaction.exchange,
             price=transaction.price,
             quantity=transaction.quantity,
-            username=username
+            username=username,
+            tag=transaction.tag
         )
         return result
     except ValueError as e:
@@ -179,7 +183,7 @@ def get_history(symbol: str, period: str = "1y", username: str = Depends(get_cur
 def update_stock_transaction(symbol: str, data: StockUpdateData, username: str = Depends(get_current_user)):
     """Directly update price, quantity, and metadata of a stock in the Excel sheet."""
     try:
-        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username)
+        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username, data.tag)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -190,7 +194,7 @@ def update_stock_transaction(symbol: str, data: StockUpdateData, username: str =
 def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, username: str = Depends(get_current_user)):
     """Update only the details (name, code, exchange) of a stock."""
     try:
-        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username)
+        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username, data.tag)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))

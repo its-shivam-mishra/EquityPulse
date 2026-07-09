@@ -328,7 +328,7 @@ body {
 /* Stock holdings table styling */
 .table-card {
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .table-header {
@@ -337,6 +337,8 @@ body {
     align-items: center;
     padding: 1.5rem 1.75rem;
     border-bottom: 1px solid var(--border-color);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
 }
 
 .table-header h3 {
@@ -348,6 +350,8 @@ body {
 .table-responsive {
     overflow-x: auto;
     width: 100%;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
 }
 
 .stock-table {
@@ -1654,4 +1658,23 @@ th.sortable.active-sort i {
 }
 .app-container.sidebar-closed .nav-item i {
     margin: 0;
+}
+
+/* --- Tag Pill & Search Bar Styles --- */
+.tag-pill {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 12px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    white-space: nowrap;
+    text-transform: capitalize;
+}
+
+.search-container input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }

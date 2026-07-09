@@ -61,7 +61,7 @@
 }
 
 .auth-switch a {
-    color: var(--primary-light);
+    color: var(--primary-hover);
     text-decoration: none;
     font-weight: 600;
 }

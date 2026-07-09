@@ -17,7 +17,7 @@ load_dotenv()
 ASSETS_DIR = Path("assets")
 EXCEL_PATH = ASSETS_DIR / "stocks.xlsx"
 COMPANY_NAME_CACHE_FILE = ASSETS_DIR / "company_names.json"
-COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]
+COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity", "Tag"]
 
 def get_company_name(ticker_obj, symbol: str) -> str:
     import json
@@ -73,6 +73,7 @@ def read_stocks(username: str) -> pd.DataFrame:
         df["Exchange"] = df["Exchange"].astype(str).str.strip().str.upper()
         df["Buying Price"] = pd.to_numeric(df["Buying Price"], errors="coerce").fillna(0.0)
         df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
+        df["Tag"] = df["Tag"].astype(str).str.strip()
         return df[COLUMNS]
     except Exception as e:
         print(f"Error reading from Cosmos DB: {e}")
@@ -100,7 +101,8 @@ def write_stocks(df: pd.DataFrame, username: str):
             "Stock Code": stock_code,
             "Exchange": exchange,
             "Buying Price": row["Buying Price"],
-            "Quantity": row["Quantity"]
+            "Quantity": row["Quantity"],
+            "Tag": row.get("Tag")
         }
         cosmos_service.upsert_stock(stock_item, username)
 
@@ -324,6 +326,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
         exchange = str(row["Exchange"]).strip().upper()
         buying_price = float(row["Buying Price"])
         quantity = float(row["Quantity"])
+        tag = str(row.get("Tag", "")).strip()
         
         # Build symbol for yfinance
         suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
@@ -359,6 +362,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_change": clean_nan(today_change),
                 "today_change_pct": clean_nan(today_change_pct),
                 "today_return_val": clean_nan(today_return_val),
+                "tag": tag if tag and tag.lower() != "nan" else None,
                 "status": "success",
                 "error": None
             })
@@ -383,13 +387,14 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_change": None,
                 "today_change_pct": None,
                 "today_return_val": None,
+                "tag": tag if tag and tag.lower() != "nan" else None,
                 "status": "error",
                 "error": str(e)
             })
             
     return results
 
-def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float, username: str) -> dict:
+def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float, username: str, tag: str = None) -> dict:
     """
     Add a stock transaction directly to Cosmos DB for a user.
     """
@@ -415,6 +420,8 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
         existing["Buying Price"] = avg_price
         existing["Quantity"] = total_qty
         existing["Company Name"] = company_name.strip()
+        if tag is not None:
+            existing["Tag"] = tag.strip()
         cosmos_service.upsert_stock(existing, username)
         action = "merged"
     else:
@@ -424,6 +431,7 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
             "Exchange": exchange_upper,
             "Buying Price": price,
             "Quantity": quantity,
+            "Tag": tag.strip() if tag else None,
             "id": symbol
         }
         cosmos_service.upsert_stock(new_item, username)
@@ -431,7 +439,7 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
         
     return {"stock_code": stock_code_upper, "action": action}
 
-def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None) -> dict:
+def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None, tag: str = None) -> dict:
     """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
@@ -447,6 +455,9 @@ def update_stock(symbol: str, price: float, quantity: float, new_company_name: s
     
     if new_company_name:
         existing["Company Name"] = new_company_name.strip()
+        
+    if tag is not None:
+        existing["Tag"] = tag.strip()
         
     if new_stock_code or new_exchange:
         old_exchange = existing["Exchange"]
@@ -679,7 +690,7 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
     except Exception as e:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
 
-def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str) -> dict:
+def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str, tag: str = None) -> dict:
     """Update only the metadata of a stock in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
@@ -691,6 +702,9 @@ def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str
         
     if new_company_name:
         existing["Company Name"] = new_company_name.strip()
+        
+    if tag is not None:
+        existing["Tag"] = tag.strip()
         
     if new_stock_code or new_exchange:
         old_exchange = existing["Exchange"]

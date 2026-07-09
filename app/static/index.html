@@ -20,8 +20,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=7">
-    <link rel="stylesheet" href="auth.css">
+    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="auth.css?v=2">
     <style id="modal-styles">
         .modal-overlay {
             position: fixed;
@@ -180,11 +180,15 @@
                         <div class="table-header">
                             <h3>Stock Holdings</h3>
                             <div style="display: flex; gap: 10px;">
-                                <div class="view-options-wrapper" style="position: relative;">
+                                <div class="search-container" style="position: relative;">
+                                    <i class="fa-solid fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
+                                    <input type="text" id="stock-search" placeholder="Search portfolio..." style="padding: 0.5rem 1rem 0.5rem 2.2rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); width: 220px; font-family: 'Inter', sans-serif; font-size: 0.85rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s;">
+                                </div>
+                                <div class="view-options-wrapper" style="position: relative; z-index: 100;">
                                     <button class="btn btn-secondary btn-icon" id="btn-view-options">
                                         <i class="fa-solid fa-list-check"></i> Columns
                                     </button>
-                                    <div id="column-dropdown" class="dropdown-menu hidden" style="position: absolute; right: 0; top: 110%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; width: 220px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                                    <div id="column-dropdown" class="dropdown-menu hidden" style="position: absolute; right: 0; top: 110%; background: var(--bg-card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; width: 220px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                                         <h4 style="margin-bottom: 0.75rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-main);">Show / Hide Columns</h4>
                                         <div class="column-toggles" id="column-toggles-list" style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem; color: var(--text-main);">
                                             <!-- Dynamically populated -->
@@ -209,6 +213,7 @@
                                         <th class="text-right sortable" data-sort="current_value">Current Value <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="today_return_val">Today's Return <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="gain_loss">Gain / Loss <i class="fa-solid fa-sort"></i></th>
+                                        <th class="text-center sortable" data-sort="tag">Tag <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-center">SMA Status (20/50/100/200)</th>
                                         <th class="text-center">Actions</th>
                                     </tr>
@@ -248,9 +253,13 @@
                             <div class="form-group">
                                 <label for="stock-exchange">Exchange <span class="required">*</span></label>
                                 <select id="stock-exchange" required>
-                                    <option value="NSE" selected>NSE (.NS)</option>
-                                    <option value="BSE">BSE (.BO)</option>
+                                    <option value="NSE">NSE</option>
+                                    <option value="BSE">BSE</option>
                                 </select>
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="stock-tag">Tag <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                                <input type="text" id="stock-tag" placeholder="e.g. Tech, Core, Dividend">
                             </div>
                             <div class="form-group">
                                 <label for="stock-price">Buying Price (₹) <span class="required">*</span></label>
@@ -479,6 +488,10 @@
                         <option value="BSE">BSE (.BO)</option>
                     </select>
                 </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="edit-stock-tag">Tag <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                    <input type="text" id="edit-stock-tag" placeholder="e.g. Tech, Core, Dividend">
+                </div>
                 <div class="form-actions" style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
                     <button type="button" class="btn btn-tertiary" id="btn-cancel-edit-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="btn-save-edit-modal">Save Changes</button>
@@ -491,7 +504,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="auth.js"></script>
-    <script src="app.js"></script>
+    <script src="auth.js?v=9"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>
