@@ -10,9 +10,9 @@ let authToken = localStorage.getItem("auth_token");
 
 // Intercept fetch to add token and handle 401
 const originalFetch = window.fetch;
-window.fetch = async function(...args) {
+window.fetch = async function (...args) {
     let [resource, config] = args;
-    
+
     // If resource is a Request object, we need to clone it or modify its headers
     if (resource instanceof Request) {
         if (authToken && !resource.headers.has('Authorization')) {
@@ -26,7 +26,7 @@ window.fetch = async function(...args) {
     // Normal string URL
     if (!config) config = {};
     if (!config.headers) config.headers = {};
-    
+
     if (config.headers instanceof Headers) {
         if (authToken && !config.headers.has('Authorization')) {
             config.headers.append('Authorization', `Bearer ${authToken}`);
@@ -36,7 +36,7 @@ window.fetch = async function(...args) {
             config.headers['Authorization'] = `Bearer ${authToken}`;
         }
     }
-    
+
     const response = await originalFetch(resource, config);
     if (response.status === 401) {
         handleLogout();
@@ -249,7 +249,7 @@ let _currentSortDirection = "asc";
 
 function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
@@ -314,7 +314,7 @@ async function fetchAndRenderStocks() {
 
 function applyCurrentSortAndRender() {
     let data = [..._currentStocksData];
-    
+
     // Search filtering
     const searchInput = document.getElementById("stock-search");
     if (searchInput && searchInput.value) {
@@ -326,7 +326,7 @@ function applyCurrentSortAndRender() {
             return name.includes(query) || code.includes(query) || tag.includes(query);
         });
     }
-    
+
     if (_currentSortColumn) {
         data.sort((a, b) => {
             let valA = a[_currentSortColumn];
@@ -1243,11 +1243,11 @@ function updateSMACards(data) {
         rsiIndEl.className = "status-indicator";
     } else {
         rsiValEl.textContent = lastRSI.toFixed(2);
-        if (lastRSI > 70) {
-            rsiIndEl.textContent = "Overbought (Bearish)";
+        if (lastRSI > 60) {
+            rsiIndEl.textContent = "Overbought (Bearish) / Buy zone";
             rsiIndEl.className = "status-indicator below"; // red
-        } else if (lastRSI < 30) {
-            rsiIndEl.textContent = "Oversold (Bullish)";
+        } else if (lastRSI < 50) {
+            rsiIndEl.textContent = "Sell Now";
             rsiIndEl.className = "status-indicator above"; // green
         } else {
             rsiIndEl.textContent = "Neutral";

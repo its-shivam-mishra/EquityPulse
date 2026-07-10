@@ -207,13 +207,21 @@ def get_stock_data(symbol: str):
         sma200 = None
 
     # Calculate today's change relative to previous close
-    if len(close_prices) >= 2:
-        prev_price = float(close_prices.iloc[-2])
-        today_change = current_price - prev_price
-        today_change_pct = (today_change / prev_price) * 100
-    else:
-        today_change = 0.0
-        today_change_pct = 0.0
+    try:
+        if hasattr(ticker, 'fast_info') and ticker.fast_info.previous_close is not None:
+            prev_price = float(ticker.fast_info.previous_close)
+            today_change = current_price - prev_price
+            today_change_pct = (today_change / prev_price) * 100
+        else:
+            raise ValueError("No fast_info")
+    except Exception:
+        if len(close_prices) >= 2:
+            prev_price = float(close_prices.iloc[-2])
+            today_change = current_price - prev_price
+            today_change_pct = (today_change / prev_price) * 100
+        else:
+            today_change = 0.0
+            today_change_pct = 0.0
 
     company_name = get_company_name(ticker, formatted_symbol)
 
