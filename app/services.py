@@ -17,7 +17,7 @@ load_dotenv()
 ASSETS_DIR = Path("assets")
 EXCEL_PATH = ASSETS_DIR / "stocks.xlsx"
 COMPANY_NAME_CACHE_FILE = ASSETS_DIR / "company_names.json"
-COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity", "Tag"]
+COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity", "Tag", "Buy Date", "_ts"]
 
 def get_company_name(ticker_obj, symbol: str) -> str:
     import json
@@ -102,7 +102,8 @@ def write_stocks(df: pd.DataFrame, username: str):
             "Exchange": exchange,
             "Buying Price": row["Buying Price"],
             "Quantity": row["Quantity"],
-            "Tag": row.get("Tag")
+            "Tag": row.get("Tag"),
+            "Buy Date": row.get("Buy Date")
         }
         cosmos_service.upsert_stock(stock_item, username)
 
@@ -342,6 +343,31 @@ def get_all_stocks_with_metrics(username: str) -> list:
         
         try:
             current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct, fetched_company_name = get_stock_data(symbol)
+            
+            import pytz
+            from datetime import datetime
+            
+            ist = pytz.timezone('Asia/Kolkata')
+            today_str = datetime.now(ist).strftime('%Y-%m-%d')
+            
+            buy_date = str(row.get("Buy Date", ""))
+            ts = row.get("_ts")
+            
+            is_bought_today = False
+            if buy_date == today_str:
+                is_bought_today = True
+            elif buy_date in ["nan", "None", "", "NaT"]:
+                if pd.notna(ts):
+                    ts_date = datetime.fromtimestamp(ts, tz=pytz.utc).astimezone(ist).strftime('%Y-%m-%d')
+                    # Fallback for stocks added before Buy Date was introduced
+                    if ts_date == today_str and current_price > 0:
+                        if abs(current_price - buying_price) / current_price < 0.10:
+                            is_bought_today = True
+
+            if is_bought_today and buying_price > 0:
+                today_change = current_price - buying_price
+                today_change_pct = (today_change / buying_price) * 100
+
             investment_value = buying_price * quantity
             current_value = current_price * quantity
             gain_loss = current_value - investment_value
@@ -418,6 +444,12 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
 
     
     existing = cosmos_service.get_stock(symbol, exchange_upper, username)
+    
+    from datetime import datetime
+    import pytz
+    ist = pytz.timezone('Asia/Kolkata')
+    today_str = datetime.now(ist).strftime('%Y-%m-%d')
+    
     if existing:
         old_price = float(existing.get("Buying Price", 0))
         old_qty = float(existing.get("Quantity", 0))
@@ -430,6 +462,12 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
         existing["Company Name"] = company_name.strip()
         if tag is not None:
             existing["Tag"] = tag.strip()
+            
+        # If they add more quantity today, we could potentially set Buy Date to today if it's the first addition,
+        # but existing means it's a merge. We keep original Buy Date.
+        if "Buy Date" not in existing:
+            existing["Buy Date"] = today_str
+            
         cosmos_service.upsert_stock(existing, username)
         action = "merged"
     else:
@@ -440,6 +478,7 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
             "Buying Price": price,
             "Quantity": quantity,
             "Tag": tag.strip() if tag else None,
+            "Buy Date": today_str,
             "id": symbol
         }
         cosmos_service.upsert_stock(new_item, username)
