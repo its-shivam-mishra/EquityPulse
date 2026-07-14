@@ -2,6 +2,7 @@ import os
 import re as _re
 import math
 import shutil
+import time
 import tempfile
 from pathlib import Path
 import pandas as pd
@@ -140,17 +141,30 @@ def format_symbol(symbol: str) -> str:
     # Already has some other suffix — return as-is
     return sym
 
+def _fetch_ticker_history_with_retry(ticker, period="1y", retries=3, delay=1.0):
+    for attempt in range(retries):
+        try:
+            hist = ticker.history(period=period)
+            if not hist.empty:
+                return hist
+        except Exception as e:
+            if attempt == retries - 1:
+                print(f"Failed to fetch history for {ticker.ticker} after {retries} attempts: {e}")
+            else:
+                time.sleep(delay)
+    return pd.DataFrame()
+
 def get_stock_data(symbol: str):
     """
     Fetch stock metadata: current price and SMA 20, 50, 100, 200.
-    Returns: (current_price, sma20, sma50, sma100, sma200, actual_symbol)
+    Returns: (current_price, sma20, sma50, sma100, sma200, actual_symbol, today_change, today_change_pct, company_name)
     """
     formatted_symbol = format_symbol(symbol)
     ticker = yf.Ticker(formatted_symbol)
     
     # We query historical data for past 1 year (approx 250 trading days)
-    # to calculate moving averages.
-    hist = ticker.history(period="1y")
+    # to calculate moving averages, using the retry mechanism.
+    hist = _fetch_ticker_history_with_retry(ticker, period="1y")
     
     # Automatic exchange fallback (NSE <-> BSE) if no historical data found
     if hist.empty:
@@ -162,13 +176,25 @@ def get_stock_data(symbol: str):
             
         if fallback_symbol:
             fallback_ticker = yf.Ticker(fallback_symbol)
-            fallback_hist = fallback_ticker.history(period="1y")
+            fallback_hist = _fetch_ticker_history_with_retry(fallback_ticker, period="1y")
             if not fallback_hist.empty:
                 formatted_symbol = fallback_symbol
                 ticker = fallback_ticker
                 hist = fallback_hist
 
     if hist.empty:
+        # FALLBACK: Try to get just the current price and previous close from fast_info if history fails
+        try:
+            if hasattr(ticker, 'fast_info') and getattr(ticker.fast_info, 'last_price', None) is not None:
+                current_price = float(ticker.fast_info.last_price)
+                prev_price = float(getattr(ticker.fast_info, 'previous_close', current_price))
+                today_change = current_price - prev_price
+                today_change_pct = (today_change / prev_price) * 100 if prev_price > 0 else 0.0
+                company_name = get_company_name(ticker, formatted_symbol)
+                return current_price, None, None, None, None, formatted_symbol, today_change, today_change_pct, company_name
+        except Exception as e:
+            print(f"Fallback to fast_info failed for {formatted_symbol}: {e}")
+            
         raise ValueError(f"Ticker '{formatted_symbol}' returned no historical data. Please verify the stock symbol.")
     
     close_prices = hist["Close"].copy()
@@ -235,7 +261,7 @@ def get_stock_history(symbol: str, period: str = "1y"):
     """
     formatted_symbol = format_symbol(symbol)
     ticker = yf.Ticker(formatted_symbol)
-    hist = ticker.history(period=period)
+    hist = _fetch_ticker_history_with_retry(ticker, period=period)
     
     # Automatic exchange fallback (NSE <-> BSE) if no historical data found
     if hist.empty:
@@ -247,7 +273,7 @@ def get_stock_history(symbol: str, period: str = "1y"):
             
         if fallback_symbol:
             fallback_ticker = yf.Ticker(fallback_symbol)
-            fallback_hist = fallback_ticker.history(period=period)
+            fallback_hist = _fetch_ticker_history_with_retry(fallback_ticker, period=period)
             if not fallback_hist.empty:
                 formatted_symbol = fallback_symbol
                 ticker = fallback_ticker
