@@ -41,6 +41,13 @@ class CosmosDBService:
             partition_key=PartitionKey(path="/username")
         )
         
+        # Create HistoricalStats container
+        self.stats_container_name = "HistoricalStats"
+        self.stats_container = self.database.create_container_if_not_exists(
+            id=self.stats_container_name,
+            partition_key=PartitionKey(path="/username")
+        )
+        
     def create_user(self, username: str, password: str):
         """Create a new user with plain text password."""
         user_item = {
@@ -100,6 +107,41 @@ class CosmosDBService:
             return True
         except Exception:
             return False
+
+    def upsert_daily_stat(self, username: str, date: str, invested: float, current_val: float, smallcap: float):
+        """Upsert daily historical stat. Keep the max current_value for the day."""
+        item_id = f"{username}_{date}"
+        
+        # Check if exists
+        try:
+            existing = self.stats_container.read_item(item=item_id, partition_key=username)
+            if current_val <= existing.get("current_value", 0):
+                # New value is not greater, do not update (preserve max value)
+                return existing
+        except Exception:
+            pass # Does not exist yet
+            
+        stat_item = {
+            "id": item_id,
+            "username": username,
+            "date": date,
+            "total_invested": invested,
+            "current_value": current_val,
+            "nifty_smallcap_100": smallcap
+        }
+        self.stats_container.upsert_item(body=stat_item)
+        return stat_item
+        
+    def get_historical_stats(self, username: str):
+        """Retrieve all historical stats for a specific user, sorted by date."""
+        query = "SELECT * FROM c WHERE c.username = @username ORDER BY c.date ASC"
+        parameters = [{"name": "@username", "value": username}]
+        items = list(self.stats_container.query_items(
+            query=query,
+            parameters=parameters,
+            enable_cross_partition_query=True
+        ))
+        return items
 
 # Create a singleton instance
 cosmos_service = CosmosDBService()

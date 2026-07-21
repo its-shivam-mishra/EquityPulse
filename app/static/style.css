@@ -258,12 +258,16 @@ body {
     background: var(--warning-light);
 }
 
-.summary-card.return-rate .card-icon {
+.summary-card.return-rate .card-icon,
+.summary-card.today-return .card-icon,
+.summary-card.index-smallcap .card-icon {
     color: var(--success);
     background: var(--success-light);
 }
 
-.summary-card.return-rate.loss .card-icon {
+.summary-card.return-rate.loss .card-icon,
+.summary-card.today-return.loss .card-icon,
+.summary-card.index-smallcap.loss .card-icon {
     color: var(--danger);
     background: var(--danger-light);
 }

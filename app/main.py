@@ -107,6 +107,11 @@ class StockUpdateData(BaseModel):
     quantity: float = Field(..., gt=0, description="New quantity of shares")
     tag: Optional[str] = Field(None, description="New tag")
 
+class DailySnapshotData(BaseModel):
+    total_invested: float = Field(..., description="Total invested amount")
+    current_value: float = Field(..., description="Current portfolio value")
+    nifty_smallcap_100: float = Field(..., description="Current Nifty SmallCap 100 value")
+
 # API Endpoints
 @app.get("/api/stocks")
 def get_stocks(username: str = Depends(get_current_user)):
@@ -237,6 +242,64 @@ def email_portfolio_report(background_tasks: BackgroundTasks = None, username: s
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate and email report: {e}")
 
+
+@app.get("/api/market-index/{symbol}")
+def get_market_index(symbol: str, username: str = Depends(get_current_user)):
+    """Fetch current price and change for a market index."""
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        
+        try:
+            fast_info = ticker.fast_info
+            current_price = float(fast_info.last_price)
+            prev_close = float(fast_info.previous_close)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Index data not found")
+        
+        if prev_close and prev_close > 0:
+            change = current_price - prev_close
+            change_pct = (change / prev_close) * 100
+        else:
+            change = 0.0
+            change_pct = 0.0
+            
+        return {
+            "symbol": symbol,
+            "current_value": current_price,
+            "change": change,
+            "change_pct": change_pct
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/stats/snapshot")
+def save_daily_snapshot(data: DailySnapshotData, username: str = Depends(get_current_user)):
+    """Save daily snapshot of portfolio stats. Overwrites existing max current_value."""
+    from app.cosmos_service import cosmos_service
+    from datetime import date
+    try:
+        today_str = date.today().isoformat()
+        result = cosmos_service.upsert_daily_stat(
+            username=username, 
+            date=today_str, 
+            invested=data.total_invested, 
+            current_val=data.current_value, 
+            smallcap=data.nifty_smallcap_100
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save snapshot: {e}")
+
+@app.get("/api/stats/history")
+def get_stats_history(username: str = Depends(get_current_user)):
+    """Get all historical snapshots for user."""
+    from app.cosmos_service import cosmos_service
+    try:
+        items = cosmos_service.get_historical_stats(username)
+        return items
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stats history: {e}")
 
 # Mount Static Files to serve frontend SPA at root "/"
 # Check if static directory exists first

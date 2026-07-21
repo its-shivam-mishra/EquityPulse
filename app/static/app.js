@@ -239,6 +239,8 @@ function switchView(viewId) {
     // Auto-reload stock table when returning to dashboard
     if (viewId === "dashboard-view") {
         fetchAndRenderStocks();
+    } else if (viewId === "trends-view") {
+        fetchAndRenderTrends();
     }
 }
 
@@ -299,6 +301,10 @@ async function fetchAndRenderStocks() {
         _currentStocksData = stocks;
         applyCurrentSortAndRender();
         updateSummaryHeader(stocks);
+        await fetchMarketIndex();
+        
+        // Save the snapshot in the background
+        saveDailySnapshot();
     } catch (error) {
         console.error(error);
         tableBody.innerHTML = `
@@ -647,6 +653,10 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
 });
 
 
+let _lastInvested = 0;
+let _lastCurrentVal = 0;
+let _lastSmallcap = 0;
+
 function updateSummaryHeader(stocks) {
     let totalInvested = 0;
     let totalCurrent = 0;
@@ -668,6 +678,9 @@ function updateSummaryHeader(stocks) {
             totalCurrent += investVal;
         }
     });
+    
+    _lastInvested = totalInvested;
+    _lastCurrentVal = totalCurrent;
 
     const totalReturn = totalCurrent - totalInvested;
     const totalReturnPct = totalInvested > 0 ? (totalReturn / totalInvested * 100) : 0.0;
@@ -723,6 +736,187 @@ function updateSummaryHeader(stocks) {
             todayReturnIconWrapper.parentNode.className = "summary-card today-return loss";
             todayReturnIconWrapper.innerHTML = '<i class="fa-solid fa-calendar-minus"></i>';
         }
+    }
+}
+
+async function fetchMarketIndex() {
+    const symbol = '^CNXSC';
+    try {
+        const response = await fetch(`/api/market-index/${encodeURIComponent(symbol)}`);
+        if (!response.ok) throw new Error("Failed to fetch index");
+        
+        const data = await response.json();
+        
+        const valEl = document.getElementById("smallcap-val");
+        const pctEl = document.getElementById("smallcap-pct");
+        const iconWrapper = document.getElementById("smallcap-icon-wrapper");
+        if (!valEl || !pctEl || !iconWrapper) return;
+        
+        const currentVal = data.current_value;
+        const change = data.change;
+        const changePct = data.change_pct;
+        
+        _lastSmallcap = currentVal;
+        
+        valEl.textContent = currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        pctEl.textContent = `(${change >= 0 ? '+' : ''}${changePct.toFixed(2)}%)`;
+        
+        if (change >= 0) {
+            valEl.className = "value gain-val";
+            pctEl.className = "percentage gain-val";
+            iconWrapper.parentNode.className = "summary-card index-smallcap";
+        } else {
+            valEl.className = "value loss-val";
+            pctEl.className = "percentage loss-val";
+            iconWrapper.parentNode.className = "summary-card index-smallcap loss";
+        }
+        
+    } catch (error) {
+        console.error("Error fetching Nifty Smallcap:", error);
+        const valEl = document.getElementById("smallcap-val");
+        if (valEl) valEl.textContent = "Error";
+    }
+}
+
+async function saveDailySnapshot() {
+    if (_lastInvested === 0 || _lastCurrentVal === 0 || _lastSmallcap === 0) return;
+    try {
+        await fetch("/api/stats/snapshot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                total_invested: _lastInvested,
+                current_value: _lastCurrentVal,
+                nifty_smallcap_100: _lastSmallcap
+            })
+        });
+    } catch (e) {
+        console.error("Failed to save daily snapshot", e);
+    }
+}
+
+let _trendsChartInstance = null;
+
+async function fetchAndRenderTrends() {
+    try {
+        const response = await fetch("/api/stats/history");
+        if (!response.ok) throw new Error("Failed to fetch historical stats");
+        
+        const data = await response.json();
+        
+        if (data.length === 0) {
+            return; // No data yet
+        }
+        
+        const labels = data.map(d => {
+            // Format date nicely
+            const dateObj = new Date(d.date);
+            return dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+        });
+        
+        const investedData = data.map(d => d.total_invested);
+        const currentData = data.map(d => d.current_value);
+        const smallcapData = data.map(d => d.nifty_smallcap_100);
+        
+        const ctx = document.getElementById('trendsChart').getContext('2d');
+        
+        if (_trendsChartInstance) {
+            _trendsChartInstance.destroy();
+        }
+        
+        _trendsChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Total Invested (₹)',
+                        data: investedData,
+                        borderColor: '#94a3b8',
+                        backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Current Value (₹)',
+                        data: currentData,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Nifty SmallCap 100',
+                        data: smallcapData,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#e2e8f0',
+                            font: { family: "'Inter', sans-serif", size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#cbd5e1',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8' },
+                        title: {
+                            display: true,
+                            text: 'Portfolio Value (₹)',
+                            color: '#94a3b8'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#10b981' },
+                        title: {
+                            display: true,
+                            text: 'Index Value',
+                            color: '#10b981'
+                        }
+                    }
+                }
+            }
+        });
+        
+    } catch (e) {
+        console.error("Failed to render trends chart", e);
     }
 }
 

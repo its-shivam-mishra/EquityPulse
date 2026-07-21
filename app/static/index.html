@@ -113,6 +113,10 @@
                     <i class="fa-solid fa-plus-circle"></i>
                     <span>Add / Update Stock</span>
                 </button>
+                <button class="nav-item" data-target="trends-view" id="nav-trends">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Trends</span>
+                </button>
                 <button class="nav-item" data-target="upload-view" id="nav-upload">
                     <i class="fa-solid fa-file-excel"></i>
                     <span>Import Excel</span>
@@ -166,6 +170,14 @@
                             <span class="label">Today's Return</span>
                             <span class="value" id="today-return-val">₹0.00</span>
                             <span class="percentage" id="today-return-pct">(0.00%)</span>
+                        </div>
+                    </div>
+                    <div class="summary-card index-smallcap">
+                        <div class="card-icon" id="smallcap-icon-wrapper"><i class="fa-solid fa-chart-pie"></i></div>
+                        <div class="card-info">
+                            <span class="label">Nifty SmallCap 100</span>
+                            <span class="value" id="smallcap-val">Loading...</span>
+                            <span class="percentage" id="smallcap-pct">(--%)</span>
                         </div>
                     </div>
                 </div>
@@ -454,6 +466,19 @@
                         </div>
                         <div class="news-list" id="stock-news-list">
                             <p class="text-muted">Loading latest news...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 5: TRENDS -->
+                <div id="trends-view" class="app-view">
+                    <div class="card" style="padding: 1.5rem; height: 100%;">
+                        <div class="card-header" style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                            <h3>Historical Portfolio & Index Performance</h3>
+                            <p class="subtitle" style="margin-top: 0.5rem;">Track your Total Invested, Current Value, and Nifty SmallCap 100 over time. Click items in the legend to toggle them.</p>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 60vh; width: 100%;">
+                            <canvas id="trendsChart"></canvas>
                         </div>
                     </div>
                 </div>
