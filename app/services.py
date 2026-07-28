@@ -336,6 +336,59 @@ def get_stock_history(symbol: str, period: str = "1y"):
     def sanitize(lst):
         return [None if (isinstance(x, float) and math.isnan(x)) else x for x in lst]
 
+    # ── Company Info ─────────────────────────────────────────────────────────
+    # Fetch rich metadata from yfinance .info for the About Company panel.
+    # All fields use .get() with None fallback so missing data never raises.
+    company_info = {}
+    try:
+        info = ticker.info or {}
+
+        def _safe(key):
+            val = info.get(key)
+            if isinstance(val, float) and math.isnan(val):
+                return None
+            return val
+
+        company_info = {
+            "longName":             _safe("longName") or _safe("shortName") or formatted_symbol,
+            "longBusinessSummary":  _safe("longBusinessSummary"),
+            "sector":               _safe("sector"),
+            "industry":             _safe("industry"),
+            "website":              _safe("website"),
+            "city":                 _safe("city"),
+            "state":                _safe("state"),
+            "country":              _safe("country"),
+            "fullTimeEmployees":    _safe("fullTimeEmployees"),
+            # Valuation
+            "marketCap":            _safe("marketCap"),
+            "trailingPE":           _safe("trailingPE"),
+            "forwardPE":            _safe("forwardPE"),
+            "priceToBook":          _safe("priceToBook"),
+            "enterpriseValue":      _safe("enterpriseValue"),
+            "trailingEps":          _safe("trailingEps"),
+            # Dividend & yield
+            "dividendYield":        _safe("dividendYield"),
+            "dividendRate":         _safe("dividendRate"),
+            # Risk
+            "beta":                 _safe("beta"),
+            # 52-week range
+            "fiftyTwoWeekHigh":     _safe("fiftyTwoWeekHigh"),
+            "fiftyTwoWeekLow":      _safe("fiftyTwoWeekLow"),
+            "fiftyDayAverage":      _safe("fiftyDayAverage"),
+            "twoHundredDayAverage": _safe("twoHundredDayAverage"),
+            # Volume
+            "averageVolume":        _safe("averageVolume"),
+            "regularMarketVolume":  _safe("regularMarketVolume"),
+            # Revenue / Profitability
+            "totalRevenue":         _safe("totalRevenue"),
+            "grossMargins":         _safe("grossMargins"),
+            "profitMargins":        _safe("profitMargins"),
+            "returnOnEquity":       _safe("returnOnEquity"),
+            "debtToEquity":         _safe("debtToEquity"),
+        }
+    except Exception as e:
+        print(f"[company_info] Failed to fetch info for {formatted_symbol}: {e}")
+
     return {
         "dates": dates,
         "prices": sanitize(closes),
@@ -347,7 +400,8 @@ def get_stock_history(symbol: str, period: str = "1y"):
         "bb_lower": sanitize(bb_lower_list),
         "rsi": sanitize(rsi_list),
         "news": news_data,
-        "symbol": formatted_symbol
+        "symbol": formatted_symbol,
+        "company_info": company_info
     }
 
 def get_all_stocks_with_metrics(username: str) -> list:

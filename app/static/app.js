@@ -1365,6 +1365,10 @@ async function loadHistoryChart(symbol, period) {
         // Draw the Chart
         renderChart(data);
 
+        // Render new panels
+        renderStockDetails(data.company_info || {});
+        renderAboutCompany(data.company_info || {});
+
     } catch (error) {
         showToast("Error loading chart: " + error.message, "error");
         console.error(error);
@@ -1678,4 +1682,152 @@ function renderChart(data) {
             }
         }
     });
+}
+
+/* ============================================================
+   Stock Details Metrics Panel
+   ============================================================ */
+function fmtINR(val) {
+    if (val === null || val === undefined) return '—';
+    if (val >= 1e12) return '₹' + (val / 1e12).toFixed(2) + ' Lakh Cr';
+    if (val >= 1e7)  return '₹' + (val / 1e7).toFixed(2) + ' Cr';
+    if (val >= 1e5)  return '₹' + (val / 1e5).toFixed(2) + ' L';
+    return '₹' + val.toFixed(2);
+}
+
+function fmtVolume(val) {
+    if (val === null || val === undefined) return '—';
+    if (val >= 1e7) return (val / 1e7).toFixed(2) + ' Cr';
+    if (val >= 1e5) return (val / 1e5).toFixed(2) + ' L';
+    if (val >= 1e3) return (val / 1e3).toFixed(1) + 'K';
+    return String(val);
+}
+
+function fmtPct(val) {
+    if (val === null || val === undefined) return '—';
+    return (val * 100).toFixed(2) + '%';
+}
+
+function fmtNum(val, decimals = 2) {
+    if (val === null || val === undefined) return '—';
+    return Number(val).toFixed(decimals);
+}
+
+function renderStockDetails(info) {
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val ?? '—';
+    };
+
+    set('metric-52wk-high',    info.fiftyTwoWeekHigh   != null ? `₹${fmtNum(info.fiftyTwoWeekHigh)}`   : '—');
+    set('metric-52wk-low',     info.fiftyTwoWeekLow    != null ? `₹${fmtNum(info.fiftyTwoWeekLow)}`    : '—');
+    set('metric-market-cap',   info.marketCap           != null ? fmtINR(info.marketCap)                : '—');
+    set('metric-pe',           info.trailingPE          != null ? fmtNum(info.trailingPE)               : '—');
+    set('metric-eps',          info.trailingEps         != null ? `₹${fmtNum(info.trailingEps)}`        : '—');
+    set('metric-dividend',     info.dividendYield       != null ? fmtPct(info.dividendYield)            : 'None');
+    set('metric-beta',         info.beta                != null ? fmtNum(info.beta)                     : '—');
+    set('metric-volume',       info.averageVolume       != null ? fmtVolume(info.averageVolume)         : '—');
+    set('metric-pb',           info.priceToBook         != null ? fmtNum(info.priceToBook)              : '—');
+    set('metric-profit-margin',info.profitMargins       != null ? fmtPct(info.profitMargins)            : '—');
+    set('metric-roe',          info.returnOnEquity      != null ? fmtPct(info.returnOnEquity)           : '—');
+    set('metric-de',           info.debtToEquity        != null ? fmtNum(info.debtToEquity)             : '—');
+
+    // Colour the 52-wk high tile green, low tile red
+    const highTile = document.getElementById('metric-52h');
+    if (highTile) highTile.querySelector('.metric-icon').style.background = 'var(--success-light)';
+    if (highTile) highTile.querySelector('.metric-icon').style.color = 'var(--success)';
+}
+
+/* ============================================================
+   About Company Panel
+   ============================================================ */
+function renderAboutCompany(info) {
+    // Company name
+    const nameEl = document.getElementById('about-company-name');
+    if (nameEl) nameEl.textContent = info.longName || '—';
+
+    // Meta pills: sector, industry, location
+    const metaEl = document.getElementById('about-company-meta');
+    if (metaEl) {
+        let pills = '';
+        if (info.sector)   pills += `<span class="about-pill about-pill-sector"><i class="fa-solid fa-layer-group"></i> ${info.sector}</span>`;
+        if (info.industry) pills += `<span class="about-pill about-pill-industry"><i class="fa-solid fa-industry"></i> ${info.industry}</span>`;
+        const loc = [info.city, info.country].filter(Boolean).join(', ');
+        if (loc)           pills += `<span class="about-pill about-pill-location"><i class="fa-solid fa-location-dot"></i> ${loc}</span>`;
+        metaEl.innerHTML = pills || '<span class="text-muted" style="font-size:0.85rem;">—</span>';
+    }
+
+    // Right-side: employees + website
+    const rightEl = document.getElementById('about-company-right');
+    if (rightEl) {
+        let rightHTML = '';
+        if (info.fullTimeEmployees) {
+            const emp = Number(info.fullTimeEmployees).toLocaleString('en-IN');
+            rightHTML += `<div class="about-stat"><i class="fa-solid fa-users"></i><span>${emp} Employees</span></div>`;
+        }
+        if (info.website) {
+            rightHTML += `<a href="${info.website}" target="_blank" class="about-website-link"><i class="fa-solid fa-globe"></i> ${info.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a>`;
+        }
+        rightEl.innerHTML = rightHTML;
+    }
+
+    // Business Summary – split into short preview + full text with toggle
+    const bio = info.longBusinessSummary || '';
+    const shortEl = document.getElementById('about-bio-short');
+    const fullEl  = document.getElementById('about-bio-full');
+    const readBtn = document.getElementById('about-read-more-btn');
+
+    // Determine truncation threshold (≈3 sentences or 400 chars)
+    const truncLen = 450;
+    const sentences = bio.split('. ');
+    let shortBio = '';
+    let fullBio  = '';
+
+    if (!bio) {
+        if (shortEl) shortEl.textContent = 'No company description available.';
+        if (fullEl)  fullEl.classList.add('hidden');
+        if (readBtn) readBtn.classList.add('hidden');
+        return;
+    }
+
+    if (bio.length <= truncLen) {
+        shortBio = bio;
+    } else {
+        // Take first ~3 sentences
+        let accum = '';
+        let cutAt = 0;
+        for (let i = 0; i < sentences.length; i++) {
+            accum += sentences[i] + '. ';
+            if (accum.length > truncLen || i >= 2) { cutAt = i; break; }
+        }
+        shortBio = sentences.slice(0, cutAt + 1).join('. ').trim();
+        fullBio  = bio; // will show the full text on expand
+    }
+
+    if (shortEl) shortEl.textContent = shortBio;
+    if (fullEl)  fullEl.textContent  = fullBio;
+
+    if (fullBio && readBtn) {
+        readBtn.classList.remove('hidden');
+        let expanded = false;
+
+        // Remove old listener by cloning
+        const freshBtn = readBtn.cloneNode(true);
+        readBtn.parentNode.replaceChild(freshBtn, readBtn);
+
+        freshBtn.addEventListener('click', () => {
+            expanded = !expanded;
+            if (expanded) {
+                if (shortEl) shortEl.classList.add('hidden');
+                if (fullEl)  fullEl.classList.remove('hidden');
+                freshBtn.innerHTML = 'Show less <i class="fa-solid fa-chevron-up"></i>';
+            } else {
+                if (shortEl) shortEl.classList.remove('hidden');
+                if (fullEl)  fullEl.classList.add('hidden');
+                freshBtn.innerHTML = 'Read more <i class="fa-solid fa-chevron-down"></i>';
+            }
+        });
+    } else if (readBtn) {
+        readBtn.classList.add('hidden');
+    }
 }

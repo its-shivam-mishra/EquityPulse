@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=10">
     <link rel="stylesheet" href="auth.css?v=2">
     <style id="modal-styles">
         .modal-overlay {
@@ -458,8 +458,150 @@
                             </div>
                         </div>
                     </div>
-                    
+
+                    <!-- Stock Details Metrics Card -->
+                    <div class="card stock-details-card" id="stock-details-card" style="margin-top: 1.5rem;">
+                        <div class="card-header" style="margin-bottom: 1.25rem;">
+                            <h3><i class="fa-solid fa-chart-column" style="color: var(--primary-hover); margin-right: 0.5rem;"></i>Stock Details</h3>
+                            <p class="subtitle" style="margin-top: 0.3rem;">Key trading metrics and valuation indicators</p>
+                        </div>
+                        <div class="stock-metrics-grid" id="stock-metrics-grid">
+                            <!-- 52-Week High -->
+                            <div class="metric-tile" id="metric-52h">
+                                <div class="metric-icon"><i class="fa-solid fa-arrow-up"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">52-Week High</span>
+                                    <span class="metric-value" id="metric-52wk-high">—</span>
+                                </div>
+                            </div>
+                            <!-- 52-Week Low -->
+                            <div class="metric-tile" id="metric-52l">
+                                <div class="metric-icon" style="background: var(--danger-light); color: var(--danger);"><i class="fa-solid fa-arrow-down"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">52-Week Low</span>
+                                    <span class="metric-value" id="metric-52wk-low">—</span>
+                                </div>
+                            </div>
+                            <!-- Market Cap -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: var(--warning-light); color: var(--warning);"><i class="fa-solid fa-building-columns"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Market Cap</span>
+                                    <span class="metric-value" id="metric-market-cap">—</span>
+                                </div>
+                            </div>
+                            <!-- P/E Ratio -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(139,92,246,0.15); color: #a78bfa;"><i class="fa-solid fa-percent"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">P/E Ratio (TTM)</span>
+                                    <span class="metric-value" id="metric-pe">—</span>
+                                </div>
+                            </div>
+                            <!-- EPS -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(20,184,166,0.15); color: #2dd4bf;"><i class="fa-solid fa-coins"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">EPS (TTM)</span>
+                                    <span class="metric-value" id="metric-eps">—</span>
+                                </div>
+                            </div>
+                            <!-- Dividend Yield -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(16,185,129,0.15); color: var(--success);"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Dividend Yield</span>
+                                    <span class="metric-value" id="metric-dividend">—</span>
+                                </div>
+                            </div>
+                            <!-- Beta -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(245,158,11,0.15); color: var(--warning);"><i class="fa-solid fa-wave-square"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Beta</span>
+                                    <span class="metric-value" id="metric-beta">—</span>
+                                </div>
+                            </div>
+                            <!-- Avg Volume -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(99,102,241,0.15); color: var(--primary-hover);"><i class="fa-solid fa-chart-bar"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Avg. Volume</span>
+                                    <span class="metric-value" id="metric-volume">—</span>
+                                </div>
+                            </div>
+                            <!-- Price to Book -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(236,72,153,0.15); color: #f472b6;"><i class="fa-solid fa-book"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Price / Book</span>
+                                    <span class="metric-value" id="metric-pb">—</span>
+                                </div>
+                            </div>
+                            <!-- Profit Margin -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(16,185,129,0.1); color: var(--success);"><i class="fa-solid fa-chart-pie"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Profit Margin</span>
+                                    <span class="metric-value" id="metric-profit-margin">—</span>
+                                </div>
+                            </div>
+                            <!-- Return on Equity -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(99,102,241,0.1); color: var(--primary-hover);"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Return on Equity</span>
+                                    <span class="metric-value" id="metric-roe">—</span>
+                                </div>
+                            </div>
+                            <!-- Debt to Equity -->
+                            <div class="metric-tile">
+                                <div class="metric-icon" style="background: rgba(239,68,68,0.1); color: var(--danger);"><i class="fa-solid fa-scale-unbalanced"></i></div>
+                                <div class="metric-body">
+                                    <span class="metric-label">Debt / Equity</span>
+                                    <span class="metric-value" id="metric-de">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- About Company Card -->
+                    <div class="card about-company-card" id="about-company-card" style="margin-top: 1.5rem;">
+                        <div class="about-company-header">
+                            <div class="about-company-identity">
+                                <div class="about-company-logo-placeholder" id="about-logo-placeholder">
+                                    <i class="fa-solid fa-building"></i>
+                                </div>
+                                <div>
+                                    <h2 id="about-company-name" style="font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; margin: 0;">Company</h2>
+                                    <div class="about-company-meta" id="about-company-meta">
+                                        <!-- sector / industry / location pills filled by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="about-company-right" id="about-company-right">
+                                <!-- employees / website filled by JS -->
+                            </div>
+                        </div>
+
+                        <div class="about-company-divider"></div>
+
+                        <div class="about-bio-wrapper">
+                            <h4 style="font-family: var(--font-heading); font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+                                <i class="fa-solid fa-circle-info" style="margin-right: 0.4rem; color: var(--primary-hover);"></i>Business Overview
+                            </h4>
+                            <div class="about-bio-text" id="about-bio-text">
+                                <p id="about-bio-short" class="bio-paragraph">Loading company information...</p>
+                                <p id="about-bio-full" class="bio-paragraph bio-full hidden"></p>
+                            </div>
+                            <button id="about-read-more-btn" class="btn-read-more hidden">
+                                Read more <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- News Section -->
+
                     <div class="card news-card" style="margin-top: 1.5rem;">
                         <div class="card-header">
                             <h3>Latest Technical & Stock News</h3>
@@ -529,7 +671,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="auth.js?v=9"></script>
-    <script src="app.js?v=9"></script>
+    <script src="auth.js?v=10"></script>
+    <script src="app.js?v=10"></script>
 </body>
 </html>

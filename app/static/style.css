@@ -1739,3 +1739,231 @@ th.sortable.active-sort i {
     border-color: var(--primary) !important;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
+
+/* ============================================================
+   Stock Details Metrics Grid
+   ============================================================ */
+.stock-details-card .card-header h3 {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.stock-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1200px) {
+    .stock-metrics-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+    .stock-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+    .stock-metrics-grid { grid-template-columns: 1fr; }
+}
+
+.metric-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.metric-tile:hover {
+    background: rgba(255, 255, 255, 0.055);
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+}
+
+.metric-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--success-light);
+    color: var(--success);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.metric-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.metric-label {
+    font-size: 0.73rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+
+.metric-value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================================
+   About Company Card
+   ============================================================ */
+.about-company-card {
+    padding: 1.75rem;
+}
+
+.about-company-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.about-company-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.about-company-logo-placeholder {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--primary-light);
+    color: var(--primary-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.about-company-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.about-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.about-pill i { font-size: 0.7rem; }
+
+.about-pill-sector {
+    background: var(--primary-light);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.about-pill-industry {
+    background: rgba(20, 184, 166, 0.1);
+    color: #2dd4bf;
+    border: 1px solid rgba(20, 184, 166, 0.2);
+}
+
+.about-pill-location {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.about-company-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+
+.about-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.87rem;
+    color: var(--text-muted);
+}
+
+.about-stat i { color: var(--primary-hover); }
+
+.about-website-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--primary-hover);
+    text-decoration: none;
+    transition: color 0.2s, text-decoration 0.2s;
+    word-break: break-all;
+}
+
+.about-website-link:hover {
+    color: #a5b4fc;
+    text-decoration: underline;
+}
+
+.about-company-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 1.25rem 0;
+}
+
+.about-bio-wrapper {
+    /* Section title and bio text */
+}
+
+.bio-paragraph {
+    line-height: 1.8;
+    font-size: 0.93rem;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.bio-full { margin-top: 0; }
+
+.btn-read-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.85rem;
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--primary-hover);
+    font-size: 0.83rem;
+    font-family: var(--font-body);
+    font-weight: 500;
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-read-more:hover {
+    background: var(--primary-light);
+    border-color: rgba(99, 102, 241, 0.4);
+}
