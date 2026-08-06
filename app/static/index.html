@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=10">
+    <link rel="stylesheet" href="style.css?v=11">
     <link rel="stylesheet" href="auth.css?v=2">
     <style id="modal-styles">
         .modal-overlay {
@@ -223,8 +223,18 @@
                                         <th class="text-right sortable" data-sort="current_price">Current Price <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="investment_value">Investment <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-right sortable" data-sort="current_value">Current Value <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="today_return_val">Today's Return <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="gain_loss">Gain / Loss <i class="fa-solid fa-sort"></i></th>
+                                        <th class="text-right sortable dual-sort-th" data-sort="today_return_val" data-sort-abs="today_return_val" data-sort-pct="today_change_pct" id="th-today-return">
+                                            <div class="th-dual-sort">
+                                                <span class="th-label">Today's Return <i class="fa-solid fa-sort"></i></span>
+                                                <button class="sort-mode-pill" id="pill-today-return" data-mode="abs" title="Switch sort: ₹ absolute / % percent">₹</button>
+                                            </div>
+                                        </th>
+                                        <th class="text-right sortable dual-sort-th" data-sort="gain_loss" data-sort-abs="gain_loss" data-sort-pct="gain_loss_pct" id="th-gain-loss">
+                                            <div class="th-dual-sort">
+                                                <span class="th-label">Gain / Loss <i class="fa-solid fa-sort"></i></span>
+                                                <button class="sort-mode-pill" id="pill-gain-loss" data-mode="abs" title="Switch sort: ₹ absolute / % percent">₹</button>
+                                            </div>
+                                        </th>
                                         <th class="text-center sortable" data-sort="tag">Tag <i class="fa-solid fa-sort"></i></th>
                                         <th class="text-center">SMA Status (20/50/100/200)</th>
                                         <th class="text-center">Actions</th>
@@ -671,7 +681,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="auth.js?v=10"></script>
-    <script src="app.js?v=10"></script>
+    <script src="auth.js?v=11"></script>
+    <script src="app.js?v=11"></script>
 </body>
 </html>

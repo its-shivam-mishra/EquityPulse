@@ -3,7 +3,7 @@ let currentSymbol = null;
 let currentPeriod = "1y";
 let historyChartInstance = null;
 let isValuesMasked = true;
-let hiddenColumns = new Set([5, 6, 8, 9]); // Default hide Investment, Current Value, and Tag columns
+let hiddenColumns = new Set([2, 3, 4, 5, 6, 8, 9]); // Default hide Investment, Current Value, and Tag columns
 
 // Auth state
 let authToken = localStorage.getItem("auth_token");
@@ -260,10 +260,14 @@ function debounce(func, wait) {
 function initStocks() {
     fetchAndRenderStocks();
 
-    // Table Sorting
+    // ── Table Sorting ───────────────────────────────────────────────────────
+    // Wire up ALL sortable headers (including dual-sort ones).
     document.querySelectorAll("th.sortable").forEach(th => {
-        th.addEventListener("click", () => {
-            const column = th.dataset.sort;
+        th.addEventListener("click", (e) => {
+            // If the click landed on the ₹/% pill, let that handler run instead.
+            if (e.target.closest(".sort-mode-pill")) return;
+
+            const column = th.dataset.sort; // always the currently-active field
             if (_currentSortColumn === column) {
                 _currentSortDirection = _currentSortDirection === "asc" ? "desc" : "asc";
             } else {
@@ -271,6 +275,35 @@ function initStocks() {
                 _currentSortDirection = "asc";
             }
             applyCurrentSortAndRender();
+        });
+    });
+
+    // ── Dual-sort ₹/% pill toggles ─────────────────────────────────────────
+    document.querySelectorAll(".dual-sort-th").forEach(th => {
+        const pill = th.querySelector(".sort-mode-pill");
+        if (!pill) return;
+
+        pill.addEventListener("click", (e) => {
+            e.stopPropagation(); // don't fire the th click handler
+
+            const isAbsNow = pill.dataset.mode === "abs";
+            const newMode = isAbsNow ? "pct" : "abs";
+            const newField = isAbsNow ? th.dataset.sortPct : th.dataset.sortAbs;
+
+            // Flip pill appearance
+            pill.dataset.mode = newMode;
+            pill.textContent = newMode === "abs" ? "₹" : "%";
+            pill.classList.toggle("pill-pct", newMode === "pct");
+
+            // Update the header's active sort field
+            th.dataset.sort = newField;
+
+            // If this column is currently sorted, re-sort with the new field
+            if (_currentSortColumn === (isAbsNow ? th.dataset.sortAbs : th.dataset.sortPct) ||
+                _currentSortColumn === newField) {
+                _currentSortColumn = newField;
+                applyCurrentSortAndRender();
+            }
         });
     });
 
@@ -302,7 +335,7 @@ async function fetchAndRenderStocks() {
         applyCurrentSortAndRender();
         updateSummaryHeader(stocks);
         await fetchMarketIndex();
-        
+
         // Save the snapshot in the background
         saveDailySnapshot();
     } catch (error) {
@@ -678,7 +711,7 @@ function updateSummaryHeader(stocks) {
             totalCurrent += investVal;
         }
     });
-    
+
     _lastInvested = totalInvested;
     _lastCurrentVal = totalCurrent;
 
@@ -744,23 +777,23 @@ async function fetchMarketIndex() {
     try {
         const response = await fetch(`/api/market-index/${encodeURIComponent(symbol)}`);
         if (!response.ok) throw new Error("Failed to fetch index");
-        
+
         const data = await response.json();
-        
+
         const valEl = document.getElementById("smallcap-val");
         const pctEl = document.getElementById("smallcap-pct");
         const iconWrapper = document.getElementById("smallcap-icon-wrapper");
         if (!valEl || !pctEl || !iconWrapper) return;
-        
+
         const currentVal = data.current_value;
         const change = data.change;
         const changePct = data.change_pct;
-        
+
         _lastSmallcap = currentVal;
-        
+
         valEl.textContent = currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         pctEl.textContent = `(${change >= 0 ? '+' : ''}${changePct.toFixed(2)}%)`;
-        
+
         if (change >= 0) {
             valEl.className = "value gain-val";
             pctEl.className = "percentage gain-val";
@@ -770,7 +803,7 @@ async function fetchMarketIndex() {
             pctEl.className = "percentage loss-val";
             iconWrapper.parentNode.className = "summary-card index-smallcap loss";
         }
-        
+
     } catch (error) {
         console.error("Error fetching Nifty Smallcap:", error);
         const valEl = document.getElementById("smallcap-val");
@@ -801,29 +834,29 @@ async function fetchAndRenderTrends() {
     try {
         const response = await fetch("/api/stats/history");
         if (!response.ok) throw new Error("Failed to fetch historical stats");
-        
+
         const data = await response.json();
-        
+
         if (data.length === 0) {
             return; // No data yet
         }
-        
+
         const labels = data.map(d => {
             // Format date nicely
             const dateObj = new Date(d.date);
             return dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
         });
-        
+
         const investedData = data.map(d => d.total_invested);
         const currentData = data.map(d => d.current_value);
         const smallcapData = data.map(d => d.nifty_smallcap_100);
-        
+
         const ctx = document.getElementById('trendsChart').getContext('2d');
-        
+
         if (_trendsChartInstance) {
             _trendsChartInstance.destroy();
         }
-        
+
         _trendsChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -914,7 +947,7 @@ async function fetchAndRenderTrends() {
                 }
             }
         });
-        
+
     } catch (e) {
         console.error("Failed to render trends chart", e);
     }
@@ -1690,8 +1723,8 @@ function renderChart(data) {
 function fmtINR(val) {
     if (val === null || val === undefined) return '—';
     if (val >= 1e12) return '₹' + (val / 1e12).toFixed(2) + ' Lakh Cr';
-    if (val >= 1e7)  return '₹' + (val / 1e7).toFixed(2) + ' Cr';
-    if (val >= 1e5)  return '₹' + (val / 1e5).toFixed(2) + ' L';
+    if (val >= 1e7) return '₹' + (val / 1e7).toFixed(2) + ' Cr';
+    if (val >= 1e5) return '₹' + (val / 1e5).toFixed(2) + ' L';
     return '₹' + val.toFixed(2);
 }
 
@@ -1719,18 +1752,18 @@ function renderStockDetails(info) {
         if (el) el.textContent = val ?? '—';
     };
 
-    set('metric-52wk-high',    info.fiftyTwoWeekHigh   != null ? `₹${fmtNum(info.fiftyTwoWeekHigh)}`   : '—');
-    set('metric-52wk-low',     info.fiftyTwoWeekLow    != null ? `₹${fmtNum(info.fiftyTwoWeekLow)}`    : '—');
-    set('metric-market-cap',   info.marketCap           != null ? fmtINR(info.marketCap)                : '—');
-    set('metric-pe',           info.trailingPE          != null ? fmtNum(info.trailingPE)               : '—');
-    set('metric-eps',          info.trailingEps         != null ? `₹${fmtNum(info.trailingEps)}`        : '—');
-    set('metric-dividend',     info.dividendYield       != null ? fmtPct(info.dividendYield)            : 'None');
-    set('metric-beta',         info.beta                != null ? fmtNum(info.beta)                     : '—');
-    set('metric-volume',       info.averageVolume       != null ? fmtVolume(info.averageVolume)         : '—');
-    set('metric-pb',           info.priceToBook         != null ? fmtNum(info.priceToBook)              : '—');
-    set('metric-profit-margin',info.profitMargins       != null ? fmtPct(info.profitMargins)            : '—');
-    set('metric-roe',          info.returnOnEquity      != null ? fmtPct(info.returnOnEquity)           : '—');
-    set('metric-de',           info.debtToEquity        != null ? fmtNum(info.debtToEquity)             : '—');
+    set('metric-52wk-high', info.fiftyTwoWeekHigh != null ? `₹${fmtNum(info.fiftyTwoWeekHigh)}` : '—');
+    set('metric-52wk-low', info.fiftyTwoWeekLow != null ? `₹${fmtNum(info.fiftyTwoWeekLow)}` : '—');
+    set('metric-market-cap', info.marketCap != null ? fmtINR(info.marketCap) : '—');
+    set('metric-pe', info.trailingPE != null ? fmtNum(info.trailingPE) : '—');
+    set('metric-eps', info.trailingEps != null ? `₹${fmtNum(info.trailingEps)}` : '—');
+    set('metric-dividend', info.dividendYield != null ? fmtPct(info.dividendYield) : 'None');
+    set('metric-beta', info.beta != null ? fmtNum(info.beta) : '—');
+    set('metric-volume', info.averageVolume != null ? fmtVolume(info.averageVolume) : '—');
+    set('metric-pb', info.priceToBook != null ? fmtNum(info.priceToBook) : '—');
+    set('metric-profit-margin', info.profitMargins != null ? fmtPct(info.profitMargins) : '—');
+    set('metric-roe', info.returnOnEquity != null ? fmtPct(info.returnOnEquity) : '—');
+    set('metric-de', info.debtToEquity != null ? fmtNum(info.debtToEquity) : '—');
 
     // Colour the 52-wk high tile green, low tile red
     const highTile = document.getElementById('metric-52h');
@@ -1750,10 +1783,10 @@ function renderAboutCompany(info) {
     const metaEl = document.getElementById('about-company-meta');
     if (metaEl) {
         let pills = '';
-        if (info.sector)   pills += `<span class="about-pill about-pill-sector"><i class="fa-solid fa-layer-group"></i> ${info.sector}</span>`;
+        if (info.sector) pills += `<span class="about-pill about-pill-sector"><i class="fa-solid fa-layer-group"></i> ${info.sector}</span>`;
         if (info.industry) pills += `<span class="about-pill about-pill-industry"><i class="fa-solid fa-industry"></i> ${info.industry}</span>`;
         const loc = [info.city, info.country].filter(Boolean).join(', ');
-        if (loc)           pills += `<span class="about-pill about-pill-location"><i class="fa-solid fa-location-dot"></i> ${loc}</span>`;
+        if (loc) pills += `<span class="about-pill about-pill-location"><i class="fa-solid fa-location-dot"></i> ${loc}</span>`;
         metaEl.innerHTML = pills || '<span class="text-muted" style="font-size:0.85rem;">—</span>';
     }
 
@@ -1774,18 +1807,18 @@ function renderAboutCompany(info) {
     // Business Summary – split into short preview + full text with toggle
     const bio = info.longBusinessSummary || '';
     const shortEl = document.getElementById('about-bio-short');
-    const fullEl  = document.getElementById('about-bio-full');
+    const fullEl = document.getElementById('about-bio-full');
     const readBtn = document.getElementById('about-read-more-btn');
 
     // Determine truncation threshold (≈3 sentences or 400 chars)
     const truncLen = 450;
     const sentences = bio.split('. ');
     let shortBio = '';
-    let fullBio  = '';
+    let fullBio = '';
 
     if (!bio) {
         if (shortEl) shortEl.textContent = 'No company description available.';
-        if (fullEl)  fullEl.classList.add('hidden');
+        if (fullEl) fullEl.classList.add('hidden');
         if (readBtn) readBtn.classList.add('hidden');
         return;
     }
@@ -1801,11 +1834,11 @@ function renderAboutCompany(info) {
             if (accum.length > truncLen || i >= 2) { cutAt = i; break; }
         }
         shortBio = sentences.slice(0, cutAt + 1).join('. ').trim();
-        fullBio  = bio; // will show the full text on expand
+        fullBio = bio; // will show the full text on expand
     }
 
     if (shortEl) shortEl.textContent = shortBio;
-    if (fullEl)  fullEl.textContent  = fullBio;
+    if (fullEl) fullEl.textContent = fullBio;
 
     if (fullBio && readBtn) {
         readBtn.classList.remove('hidden');
@@ -1819,11 +1852,11 @@ function renderAboutCompany(info) {
             expanded = !expanded;
             if (expanded) {
                 if (shortEl) shortEl.classList.add('hidden');
-                if (fullEl)  fullEl.classList.remove('hidden');
+                if (fullEl) fullEl.classList.remove('hidden');
                 freshBtn.innerHTML = 'Show less <i class="fa-solid fa-chevron-up"></i>';
             } else {
                 if (shortEl) shortEl.classList.remove('hidden');
-                if (fullEl)  fullEl.classList.add('hidden');
+                if (fullEl) fullEl.classList.add('hidden');
                 freshBtn.innerHTML = 'Read more <i class="fa-solid fa-chevron-down"></i>';
             }
         });
