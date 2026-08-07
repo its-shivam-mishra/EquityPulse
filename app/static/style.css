@@ -2096,3 +2096,258 @@ th.sortable.active-sort i {
     .sort-mode-pill.pill-pct:hover {
         background: rgba(16, 185, 129, 0.25);
     }
+
+/* ============================================================
+   Portfolio Validator View
+   ============================================================ */
+
+/* ── Summary strip ─────────────────────────────────────────── */
+.validate-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+@media (max-width: 900px) { .validate-summary-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .validate-summary-strip { grid-template-columns: 1fr 1fr; } }
+
+.vs-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.1rem 1.25rem;
+    backdrop-filter: blur(12px);
+}
+
+.vs-card > i { font-size: 1.5rem; flex-shrink: 0; }
+.vs-card > div { display: flex; flex-direction: column; }
+
+.vs-count {
+    font-family: var(--font-heading);
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.vs-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.vs-match  { border-left: 3px solid var(--success); }
+.vs-match i, .vs-match .vs-count { color: var(--success); }
+
+.vs-mismatch  { border-left: 3px solid var(--warning); }
+.vs-mismatch i, .vs-mismatch .vs-count { color: var(--warning); }
+
+.vs-notdb  { border-left: 3px solid rgba(99, 102, 241, 0.8); }
+.vs-notdb i, .vs-notdb .vs-count { color: var(--primary-hover); }
+
+.vs-notfile  { border-left: 3px solid var(--danger); }
+.vs-notfile i, .vs-notfile .vs-count { color: var(--danger); }
+
+/* ── Filter tabs ───────────────────────────────────────────── */
+.validate-filter-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.vf-tab {
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.83rem;
+    font-family: var(--font-body);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.vf-tab:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-main);
+}
+
+.vf-tab.active {
+    background: var(--primary-light);
+    color: var(--primary-hover);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* ── Status badges ─────────────────────────────────────────── */
+.validate-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vb-match    { background: rgba(16,185,129,0.12); color: var(--success);         border: 1px solid rgba(16,185,129,0.3); }
+.vb-mismatch { background: rgba(245,158,11,0.12); color: var(--warning);          border: 1px solid rgba(245,158,11,0.3); }
+.vb-notdb    { background: var(--primary-light);  color: var(--primary-hover);     border: 1px solid rgba(99,102,241,0.3); }
+.vb-notfile  { background: rgba(239,68,68,0.10);  color: var(--danger);            border: 1px solid rgba(239,68,68,0.25); }
+
+/* ── Row highlight classes ─────────────────────────────────── */
+.validate-table tbody tr.vr-mismatch td {
+    background: rgba(245, 158, 11, 0.04);
+}
+.validate-table tbody tr.vr-notdb td {
+    background: rgba(99, 102, 241, 0.04);
+}
+.validate-table tbody tr.vr-notfile td {
+    background: rgba(239, 68, 68, 0.04);
+}
+
+/* ── Cell-level mismatch highlight ────────────────────────── */
+.vr-mismatch-cell {
+    background: rgba(245, 158, 11, 0.07) !important;
+}
+
+.validate-diff {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+/* ── File chips (shown in dropzone after selection) ──────── */
+.validate-file-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    justify-content: center;
+}
+
+.vfc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    max-width: 260px;
+}
+
+.vfc-icon-file { color: #22c55e; font-size: 0.85rem; }
+
+.vfc-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+/* Status icon colours */
+.vfc-status       { font-size: 0.8rem; flex-shrink: 0; }
+.vfc-pending      { color: var(--text-muted); }
+.vfc-loading      { color: var(--warning); }
+.vfc-done         { color: var(--success); }
+.vfc-error        { color: var(--danger); }
+
+/* Source file tag in results table */
+.vfc-source-tag {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    background: rgba(99, 102, 241, 0.1);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   Auto-refresh countdown button
+   ============================================================ */
+.auto-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    user-select: none;
+}
+
+/* Ring + icon wrapper */
+.ar-ring-wrap {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* SVG ring */
+.ar-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: rotate(-90deg); /* start arc at 12 o'clock */
+}
+
+/* Background track */
+.ar-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 3.5;
+}
+
+/* Animated progress arc */
+.ar-ring-arc {
+    fill: none;
+    stroke: var(--success);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s linear, stroke 0.5s ease;
+}
+
+/* Refresh icon centred in the ring */
+.ar-icon {
+    position: relative;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+}
+
+.auto-refresh-btn:hover .ar-icon {
+    transform: rotate(180deg);
+    color: var(--primary-hover);
+}
+
+/* Countdown label */
+.ar-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: var(--font-heading);
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    transition: color 0.5s ease;
+    min-width: 28px;   /* prevents layout shift as digits change */
+}
+
+#ar-countdown {
+    transition: color 0.5s ease;
+}
+

@@ -625,7 +625,169 @@ def _check_portfolio_writable():
     pass
 
 
+def validate_portfolio_file(file_path: Path, username: str) -> dict:
+    """
+    Read an uploaded Excel file and compare it row-by-row against the user's
+    live portfolio in Cosmos DB.
+
+    Returns a dict with:
+      - rows: list of per-row comparison results
+      - summary: counts of match / mismatch / not_in_db / not_in_file
+    """
+    try:
+        up_df = pd.read_excel(file_path)
+    except Exception as e:
+        raise ValueError(f"Could not parse uploaded file: {e}")
+
+    # Drop unnamed index columns
+    up_df = up_df.loc[:, ~up_df.columns.str.match(r'^Unnamed')]
+
+    # Same fuzzy header resolution as merge_uploaded_file
+    exact_map = {
+        "company name": "Company Name", "company": "Company Name",
+        "stock code": "Stock Code", "stock": "Stock Code",
+        "ticker": "Stock Code", "symbol": "Stock Code", "code": "Stock Code",
+        "exchange": "Exchange", "market": "Exchange",
+        "buying price": "Buying Price", "buy price": "Buying Price",
+        "price": "Buying Price", "avg price": "Buying Price",
+        "average price": "Buying Price",
+        "quantity": "Quantity", "qty": "Quantity", "shares": "Quantity",
+    }
+
+    headers_map = {}
+    for col in up_df.columns:
+        col_clean = str(col).strip().lower()
+        if col_clean in exact_map:
+            headers_map[col] = exact_map[col_clean]
+
+    # Fuzzy fallback for required fields
+    required_fields = ["Stock Code", "Buying Price", "Quantity"]
+    for f in required_fields:
+        if f not in headers_map.values():
+            for col in up_df.columns:
+                if col in headers_map:
+                    continue
+                col_clean = str(col).strip().lower()
+                if f == "Stock Code" and ("stock" in col_clean or "ticker" in col_clean):
+                    headers_map[col] = "Stock Code"; break
+                if f == "Buying Price" and ("price" in col_clean or "buy" in col_clean):
+                    headers_map[col] = "Buying Price"; break
+                if f == "Quantity" and ("qty" in col_clean or "quantity" in col_clean or "share" in col_clean):
+                    headers_map[col] = "Quantity"; break
+
+    for f in required_fields:
+        if f not in headers_map.values():
+            raise ValueError(
+                f"Uploaded file missing required column: '{f}'. "
+                f"Columns found: {list(up_df.columns)}."
+            )
+
+    up_df = up_df.rename(columns=headers_map)
+    if "Company Name" not in up_df.columns:
+        up_df["Company Name"] = up_df["Stock Code"]
+    if "Exchange" not in up_df.columns:
+        up_df["Exchange"] = "NSE"
+
+    up_df = up_df[["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]].dropna(subset=["Stock Code"])
+    up_df = up_df[up_df["Stock Code"].astype(str).str.strip() != ""]
+
+    # Fetch live DB portfolio
+    db_df = read_stocks(username)
+    # Build a lookup: stock_code.upper() → row
+    db_lookup = {
+        str(r["Stock Code"]).strip().upper(): r
+        for _, r in db_df.iterrows()
+    }
+
+    PRICE_TOLERANCE = 0.02   # 2% tolerance for floating-point differences
+    QTY_TOLERANCE   = 0.01   # absolute units
+
+    rows = []
+    seen_codes = set()
+
+    for _, row in up_df.iterrows():
+        code = str(row["Stock Code"]).strip().upper()
+        if not code or code.lower() == "nan":
+            continue
+
+        file_price = float(row["Buying Price"]) if pd.notna(row["Buying Price"]) else None
+        file_qty   = float(row["Quantity"])     if pd.notna(row["Quantity"])     else None
+        file_exch  = str(row["Exchange"]).strip().upper() if pd.notna(row.get("Exchange")) else "NSE"
+
+        seen_codes.add(code)
+        entry = {
+            "stock_code":    code,
+            "company_name":  str(row.get("Company Name", code)).strip(),
+            "exchange_file": file_exch,
+            "price_file":    file_price,
+            "qty_file":      file_qty,
+            "price_db":      None,
+            "qty_db":        None,
+            "exchange_db":   None,
+            "status":        "not_in_db",
+            "mismatches":    [],
+        }
+
+        if code in db_lookup:
+            db_row = db_lookup[code]
+            db_price = float(db_row["Buying Price"])
+            db_qty   = float(db_row["Quantity"])
+            db_exch  = str(db_row["Exchange"]).strip().upper()
+
+            entry["price_db"]    = db_price
+            entry["qty_db"]      = db_qty
+            entry["exchange_db"] = db_exch
+
+            mismatches = []
+            if file_price is not None:
+                pct_diff = abs(file_price - db_price) / db_price if db_price else 0
+                if pct_diff > PRICE_TOLERANCE:
+                    mismatches.append("price")
+            if file_qty is not None and abs(file_qty - db_qty) > QTY_TOLERANCE:
+                mismatches.append("qty")
+
+            if not mismatches:
+                entry["status"] = "match"
+            elif len(mismatches) == 1:
+                entry["status"] = f"{mismatches[0]}_mismatch"
+            else:
+                entry["status"] = "multi_mismatch"
+            entry["mismatches"] = mismatches
+
+        rows.append(entry)
+
+    # Stocks in DB but NOT in the uploaded file
+    not_in_file = []
+    for code, db_row in db_lookup.items():
+        if code not in seen_codes:
+            not_in_file.append({
+                "stock_code":   code,
+                "company_name": str(db_row.get("Company Name", code)).strip(),
+                "exchange_db":  str(db_row["Exchange"]).strip().upper(),
+                "price_db":     float(db_row["Buying Price"]),
+                "qty_db":       float(db_row["Quantity"]),
+            })
+
+    # Summary counts
+    match_count    = sum(1 for r in rows if r["status"] == "match")
+    mismatch_count = sum(1 for r in rows if r["status"] != "match" and r["status"] != "not_in_db")
+    not_in_db      = sum(1 for r in rows if r["status"] == "not_in_db")
+
+    return {
+        "rows":          rows,
+        "not_in_file":   not_in_file,
+        "summary": {
+            "total_in_file":  len(rows),
+            "match":          match_count,
+            "mismatch":       mismatch_count,
+            "not_in_db":      not_in_db,
+            "not_in_file":    len(not_in_file),
+        }
+    }
+
+
 def merge_uploaded_file(file_path: Path, username: str) -> dict:
+
     """
     Read uploaded Excel, validate headers, and merge stocks into the main portfolio.
     Expected columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.

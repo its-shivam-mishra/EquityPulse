@@ -73,6 +73,7 @@ function initApp() {
     initDetails();
     initMaskToggle();
     initColumnVisibility();
+    initValidate();
 }
 
 function initMaskToggle() {
@@ -307,20 +308,94 @@ function initStocks() {
         });
     });
 
-    // Refresh button
-    const refreshBtn = document.getElementById("refresh-stocks");
-    if (refreshBtn) {
-        refreshBtn.addEventListener("click", () => {
-            fetchAndRenderStocks();
-            showToast("Refreshing live market data...", "info");
-        });
-    }
 
     // Search Bar
     const searchInput = document.getElementById("stock-search");
     if (searchInput) {
         searchInput.addEventListener("input", debounce(applyCurrentSortAndRender, 300));
     }
+
+    // Auto-refresh countdown
+    initAutoRefresh();
+}
+
+// ── Auto-refresh timer ──────────────────────────────────────────────────────
+const AUTO_REFRESH_SECS = 60;
+let   _arInterval       = null;
+let   _arRemaining      = AUTO_REFRESH_SECS;
+
+function initAutoRefresh() {
+    const btn = document.getElementById('refresh-stocks');
+    if (!btn) return;
+
+    // Manual click — refresh immediately and reset the countdown
+    btn.addEventListener('click', () => {
+        fetchAndRenderStocks();
+        showToast('Refreshing live market data...', 'info');
+        resetAutoRefresh();
+    });
+
+    startAutoRefresh();
+}
+
+function startAutoRefresh() {
+    _arRemaining = AUTO_REFRESH_SECS;
+    updateArUI(_arRemaining);
+
+    if (_arInterval) clearInterval(_arInterval);
+
+    _arInterval = setInterval(() => {
+        _arRemaining -= 1;
+        updateArUI(_arRemaining);
+
+        if (_arRemaining <= 0) {
+            // Time's up — fetch and restart
+            fetchAndRenderStocks();
+            _arRemaining = AUTO_REFRESH_SECS;
+            updateArUI(_arRemaining);
+        }
+    }, 1000);
+}
+
+function resetAutoRefresh() {
+    _arRemaining = AUTO_REFRESH_SECS;
+    updateArUI(_arRemaining);
+    if (_arInterval) clearInterval(_arInterval);
+    _arInterval = setInterval(() => {
+        _arRemaining -= 1;
+        updateArUI(_arRemaining);
+        if (_arRemaining <= 0) {
+            fetchAndRenderStocks();
+            _arRemaining = AUTO_REFRESH_SECS;
+            updateArUI(_arRemaining);
+        }
+    }, 1000);
+}
+
+function updateArUI(secs) {
+    // Countdown label
+    const label = document.getElementById('ar-countdown');
+    if (label) label.textContent = secs;
+
+    // SVG ring: stroke-dashoffset drives the arc.
+    // dasharray=100 means 100 units = full circle.
+    // offset 0 = full ring, offset 100 = empty ring.
+    const arc = document.getElementById('ar-ring-arc');
+    if (!arc) return;
+
+    const pct    = secs / AUTO_REFRESH_SECS;       // 1.0 → 0.0
+    const offset = (1 - pct) * 100;                 // 0 → 100
+    arc.style.strokeDashoffset = offset.toFixed(2);
+
+    // Colour shifts: green → amber → red as time runs out
+    let colour;
+    if (pct > 0.5)      colour = 'var(--success)';
+    else if (pct > 0.2) colour = 'var(--warning)';
+    else                colour = 'var(--danger)';
+    arc.style.stroke = colour;
+
+    // Also colour the label
+    if (label) label.style.color = colour;
 }
 
 async function fetchAndRenderStocks() {
@@ -1863,4 +1938,265 @@ function renderAboutCompany(info) {
     } else if (readBtn) {
         readBtn.classList.add('hidden');
     }
+}
+
+/* ============================================================
+   Portfolio Validator
+   ============================================================ */
+
+// Store the full result set so filter tabs can re-render without re-fetching.
+let _validateData = null;
+
+function initValidate() {
+    const dropzone  = document.getElementById('validate-dropzone');
+    const fileInput = document.getElementById('validate-file-input');
+    if (!dropzone || !fileInput) return;
+
+    // Drag & drop — accept multiple files
+    dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        const files = [...e.dataTransfer.files].filter(f => f.name.match(/\.(xlsx|xls)$/i));
+        if (files.length) {
+            showValidateFileChips(files);
+            handleValidateUploads(files);
+        } else {
+            showToast('Please drop .xlsx or .xls files only.', 'error');
+        }
+    });
+
+    // Browse button — multiple
+    fileInput.addEventListener('change', () => {
+        const files = [...fileInput.files];
+        if (files.length) {
+            showValidateFileChips(files);
+            handleValidateUploads(files);
+        }
+        fileInput.value = ''; // reset so same file can be re-selected
+    });
+
+    // Filter tabs
+    document.querySelectorAll('.vf-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.vf-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            if (_validateData) renderValidateTable(_validateData, tab.dataset.filter);
+        });
+    });
+}
+
+/* Show file chips in the dropzone with per-file status icons */
+function showValidateFileChips(files) {
+    const container = document.getElementById('validate-file-list');
+    if (!container) return;
+    container.classList.remove('hidden');
+    container.innerHTML = '';
+    files.forEach((f, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'vfc-chip';
+        chip.id = `vfc-${i}`;
+        chip.innerHTML = `
+            <i class="fa-solid fa-file-excel vfc-icon-file"></i>
+            <span class="vfc-name">${f.name}</span>
+            <i class="fa-solid fa-clock vfc-status" id="vfc-status-${i}" title="Pending"></i>
+        `;
+        container.appendChild(chip);
+    });
+}
+
+function setChipStatus(idx, status) {
+    const icon = document.getElementById(`vfc-status-${idx}`);
+    if (!icon) return;
+    icon.className = `fa-solid vfc-status vfc-${status}`;
+    const map = { pending: 'fa-clock', loading: 'fa-spinner fa-spin', done: 'fa-circle-check', error: 'fa-circle-xmark' };
+    icon.className = `fa-solid ${map[status] || 'fa-clock'} vfc-status vfc-${status}`;
+}
+
+/* Upload all files in parallel, merge results */
+async function handleValidateUploads(files) {
+    const resultsEl = document.getElementById('validate-results');
+    resultsEl.classList.add('hidden');
+    showToast(`Validating ${files.length} file${files.length > 1 ? 's' : ''}...`, 'info');
+
+    // Launch all requests concurrently
+    const promises = files.map((file, idx) => validateSingleFile(file, idx));
+    const results  = await Promise.allSettled(promises);
+
+    // Merge all successful results into one unified dataset
+    const merged = {
+        rows:        [],
+        not_in_file: [],
+        summary:     { total_in_file: 0, match: 0, mismatch: 0, not_in_db: 0, not_in_file: 0 }
+    };
+
+    let anySuccess = false;
+    results.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && res.value) {
+            anySuccess = true;
+            const d = res.value;
+            const fname = files[idx].name;
+
+            // Tag every row with the source filename
+            d.rows.forEach(r => merged.rows.push({ ...r, _source_file: fname }));
+            d.not_in_file.forEach(r => merged.not_in_file.push({ ...r, _source: 'not_in_file', _source_file: '(DB only)' }));
+
+            merged.summary.total_in_file += d.summary.total_in_file;
+            merged.summary.match         += d.summary.match;
+            merged.summary.mismatch      += d.summary.mismatch;
+            merged.summary.not_in_db     += d.summary.not_in_db;
+        }
+    });
+
+    // Deduplicate not_in_file (DB record might appear for each file)
+    const seenNIF = new Set();
+    merged.not_in_file = merged.not_in_file.filter(r => {
+        if (seenNIF.has(r.stock_code)) return false;
+        seenNIF.add(r.stock_code);
+        return true;
+    });
+    merged.summary.not_in_file = merged.not_in_file.length;
+
+    if (!anySuccess) {
+        showToast('All files failed validation. Check the column format.', 'error');
+        return;
+    }
+
+    _validateData = merged;
+    renderValidateResults(merged);
+    showToast(`Validation complete! Processed ${files.length} file${files.length > 1 ? 's' : ''}.`, 'success');
+}
+
+async function validateSingleFile(file, idx) {
+    setChipStatus(idx, 'loading');
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const resp = await fetch('/api/stocks/validate', { method: 'POST', body: formData });
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || 'Validation failed.');
+        }
+        const data = await resp.json();
+        setChipStatus(idx, 'done');
+        return data;
+    } catch (err) {
+        setChipStatus(idx, 'error');
+        showToast(`Error in "${file.name}": ${err.message}`, 'error');
+        return null;
+    }
+}
+
+
+function renderValidateResults(data) {
+    const resultsEl = document.getElementById('validate-results');
+    resultsEl.classList.remove('hidden');
+
+    // Summary counts
+    document.getElementById('vs-match-count').textContent   = data.summary.match;
+    document.getElementById('vs-mismatch-count').textContent = data.summary.mismatch;
+    document.getElementById('vs-notdb-count').textContent   = data.summary.not_in_db;
+    document.getElementById('vs-notfile-count').textContent = data.summary.not_in_file;
+
+    // Reset filter tabs to 'all'
+    document.querySelectorAll('.vf-tab').forEach(t => t.classList.remove('active'));
+    const allTab = document.querySelector('.vf-tab[data-filter="all"]');
+    if (allTab) allTab.classList.add('active');
+
+    renderValidateTable(data, 'all');
+}
+
+function renderValidateTable(data, filter) {
+    const tbody = document.getElementById('validate-table-body');
+    tbody.innerHTML = '';
+
+    // Build the full list to display: rows from file + not_in_file rows
+    let rows = [];
+
+    if (filter === 'not_in_file') {
+        // Show only DB records missing from file
+        data.not_in_file.forEach(r => {
+            rows.push({ ...r, _source: 'not_in_file' });
+        });
+    } else {
+        data.rows.forEach(r => {
+            if (filter === 'all')                                               rows.push(r);
+            else if (filter === 'mismatch' && r.status !== 'match' && r.status !== 'not_in_db') rows.push(r);
+            else if (filter === 'not_in_db' && r.status === 'not_in_db')       rows.push(r);
+        });
+    }
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding:2.5rem;color:var(--text-muted);">
+            <i class="fa-solid fa-inbox" style="font-size:2rem;display:block;margin-bottom:0.5rem;opacity:0.4;"></i>
+            No records match this filter.
+        </td></tr>`;
+        return;
+    }
+
+    rows.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+
+        // Determine status info
+        let statusBadge, rowClass = '';
+        if (r._source === 'not_in_file') {
+            statusBadge = `<span class="validate-badge vb-notfile"><i class="fa-solid fa-file-circle-xmark"></i> Not in File</span>`;
+            rowClass = 'vr-notfile';
+        } else if (r.status === 'match') {
+            statusBadge = `<span class="validate-badge vb-match"><i class="fa-solid fa-circle-check"></i> Match</span>`;
+        } else if (r.status === 'not_in_db') {
+            statusBadge = `<span class="validate-badge vb-notdb"><i class="fa-solid fa-circle-question"></i> Not in DB</span>`;
+            rowClass = 'vr-notdb';
+        } else {
+            const labels = (r.mismatches || []).map(m => m === 'price' ? 'Price' : 'Qty').join(' + ');
+            statusBadge = `<span class="validate-badge vb-mismatch"><i class="fa-solid fa-triangle-exclamation"></i> ${labels} Mismatch</span>`;
+            rowClass = 'vr-mismatch';
+        }
+
+        // Helper: wrap a cell value in a highlight span if it's a mismatch field
+        const h = (val, isMismatch) => isMismatch
+            ? `<span class="validate-diff">${val}</span>`
+            : val;
+
+        const priceMismatch = r.mismatches && r.mismatches.includes('price');
+        const qtyMismatch   = r.mismatches && r.mismatches.includes('qty');
+
+        const fmt = v => (v != null ? `₹${Number(v).toFixed(2)}` : '—');
+        const fmtQ = v => (v != null ? Number(v) : '—');
+
+        if (r._source === 'not_in_file') {
+            // Only DB columns available
+            const sfLabel = r._source_file || '(DB only)';
+            tr.innerHTML = `
+                <td class="text-center">${idx + 1}</td>
+                <td><strong>${r.stock_code}</strong></td>
+                <td>${r.company_name || '—'}</td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-right text-muted">—</td>
+                <td class="text-right">${fmt(r.price_db)}</td>
+                <td class="text-right text-muted">—</td>
+                <td class="text-right">${fmtQ(r.qty_db)}</td>
+                <td class="text-center">${r.exchange_db || '—'}</td>
+                <td class="text-center"><span class="vfc-source-tag">${sfLabel}</span></td>
+            `;
+        } else {
+            const sfLabel = r._source_file || '—';
+            tr.innerHTML = `
+                <td class="text-center">${idx + 1}</td>
+                <td><strong>${r.stock_code}</strong></td>
+                <td>${r.company_name || '—'}</td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-right ${priceMismatch ? 'vr-mismatch-cell' : ''}">${h(fmt(r.price_file), priceMismatch)}</td>
+                <td class="text-right ${priceMismatch ? 'vr-mismatch-cell' : ''}">${h(fmt(r.price_db), priceMismatch)}</td>
+                <td class="text-right ${qtyMismatch ? 'vr-mismatch-cell' : ''}">${h(fmtQ(r.qty_file), qtyMismatch)}</td>
+                <td class="text-right ${qtyMismatch ? 'vr-mismatch-cell' : ''}">${h(fmtQ(r.qty_db), qtyMismatch)}</td>
+                <td class="text-center">${r.exchange_file || r.exchange_db || '—'}</td>
+                <td class="text-center"><span class="vfc-source-tag">${sfLabel}</span></td>
+            `;
+        }
+
+        if (rowClass) tr.classList.add(rowClass);
+        tbody.appendChild(tr);
+    });
 }

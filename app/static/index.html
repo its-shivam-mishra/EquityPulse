@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=14">
     <link rel="stylesheet" href="auth.css?v=2">
     <style id="modal-styles">
         .modal-overlay {
@@ -121,6 +121,10 @@
                     <i class="fa-solid fa-file-excel"></i>
                     <span>Import Excel</span>
                 </button>
+                <button class="nav-item" data-target="validate-view" id="nav-validate">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                    <span>Validate Portfolio</span>
+                </button>
             </div>
             <div class="nav-footer">
                 <div class="exchange-tag">
@@ -207,8 +211,20 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn btn-secondary btn-icon" id="refresh-stocks">
-                                    <i class="fa-solid fa-arrows-rotate"></i> Refresh Rates
+                                <button class="btn btn-secondary btn-icon auto-refresh-btn" id="refresh-stocks" title="Auto-refreshes every 60s. Click to refresh now.">
+                                    <!-- SVG countdown ring -->
+                                    <span class="ar-ring-wrap">
+                                        <svg class="ar-ring" viewBox="0 0 36 36" width="22" height="22">
+                                            <circle class="ar-ring-bg" cx="18" cy="18" r="15.9" />
+                                            <circle class="ar-ring-arc" id="ar-ring-arc" cx="18" cy="18" r="15.9"
+                                                stroke-dasharray="100 100"
+                                                stroke-dashoffset="0" />
+                                        </svg>
+                                        <i class="fa-solid fa-arrows-rotate ar-icon"></i>
+                                    </span>
+                                    <span class="ar-label">
+                                        <span id="ar-countdown">60</span>s
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -337,6 +353,108 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- VIEW: VALIDATE PORTFOLIO -->
+                <div id="validate-view" class="app-view">
+                    <div class="card upload-card" id="validate-upload-card">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-clipboard-check" style="color:var(--primary-hover);margin-right:0.5rem;"></i>Portfolio Validator</h3>
+                            <p class="hint-text">Upload your Excel stock list to compare it against your live database records. No data will be modified.</p>
+                        </div>
+                        <div class="upload-area" id="validate-dropzone">
+                            <i class="fa-solid fa-magnifying-glass-chart cloud-icon"></i>
+                            <h4>Drag &amp; Drop one or more Excel files</h4>
+                            <p>or</p>
+                            <label for="validate-file-input" class="btn btn-secondary">
+                                <i class="fa-solid fa-folder-open"></i> Browse Files
+                            </label>
+                            <input type="file" id="validate-file-input" accept=".xlsx, .xls" multiple style="display: none;">
+                            <span class="file-format-info">Supported formats: .xlsx, .xls &nbsp;·&nbsp; Multiple files allowed</span>
+                            <!-- Selected file chips -->
+                            <div id="validate-file-list" class="validate-file-chips hidden"></div>
+                        </div>
+                        <div class="excel-format-guide">
+                            <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
+                            <p>Your file must contain at least:</p>
+                            <div class="columns-badge-container">
+                                <span class="badge">Stock Code</span>
+                                <span class="badge">Buying Price</span>
+                                <span class="badge">Quantity</span>
+                            </div>
+                            <p style="margin-top:0.6rem;font-size:0.82rem;color:var(--text-muted);">Buying Price is compared with a ±2% tolerance. Quantity must match exactly.</p>
+                        </div>
+                    </div>
+
+                    <!-- Validation Results -->
+                    <div id="validate-results" class="hidden" style="margin-top:1.5rem;">
+
+                        <!-- Summary Strip -->
+                        <div class="validate-summary-strip" id="validate-summary-strip">
+                            <div class="vs-card vs-match">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <div>
+                                    <span class="vs-count" id="vs-match-count">0</span>
+                                    <span class="vs-label">Matched</span>
+                                </div>
+                            </div>
+                            <div class="vs-card vs-mismatch">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <div>
+                                    <span class="vs-count" id="vs-mismatch-count">0</span>
+                                    <span class="vs-label">Mismatched</span>
+                                </div>
+                            </div>
+                            <div class="vs-card vs-notdb">
+                                <i class="fa-solid fa-circle-question"></i>
+                                <div>
+                                    <span class="vs-count" id="vs-notdb-count">0</span>
+                                    <span class="vs-label">Not in DB</span>
+                                </div>
+                            </div>
+                            <div class="vs-card vs-notfile">
+                                <i class="fa-solid fa-file-circle-xmark"></i>
+                                <div>
+                                    <span class="vs-count" id="vs-notfile-count">0</span>
+                                    <span class="vs-label">Not in File</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filter Tabs -->
+                        <div class="validate-filter-tabs" id="validate-filter-tabs">
+                            <button class="vf-tab active" data-filter="all">All</button>
+                            <button class="vf-tab" data-filter="mismatch">Mismatches Only</button>
+                            <button class="vf-tab" data-filter="not_in_db">Not in DB</button>
+                            <button class="vf-tab" data-filter="not_in_file">Not in File</button>
+                        </div>
+
+                        <!-- Main Results Table -->
+                        <div class="card" style="padding:0;overflow:visible;">
+                            <div class="table-responsive">
+                                <table class="stock-table validate-table" id="validate-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Stock Code</th>
+                                            <th>Company</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-right">Buy Price (File)</th>
+                                            <th class="text-right">Buy Price (DB)</th>
+                                            <th class="text-right">Qty (File)</th>
+                                            <th class="text-right">Qty (DB)</th>
+                                            <th class="text-center">Exchange</th>
+                                            <th class="text-center">Source File</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="validate-table-body">
+                                        <!-- Populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div><!-- /validate-results -->
+                </div><!-- /validate-view -->
 
                 <!-- VIEW 4: STOCK DETAILS & SMA ANALYSIS -->
                 <div id="details-view" class="app-view">
@@ -681,7 +799,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="auth.js?v=11"></script>
-    <script src="app.js?v=11"></script>
+    <script src="auth.js?v=14"></script>
+    <script src="app.js?v=14"></script>
 </body>
 </html>

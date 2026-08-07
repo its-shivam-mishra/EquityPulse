@@ -17,6 +17,7 @@ from app.services import (
     update_stock,
     delete_stock,
     merge_uploaded_file,
+    validate_portfolio_file,
     send_portfolio_email,
     update_stock_details
 )
@@ -168,6 +169,32 @@ def upload_excel(file: UploadFile = File(...), username: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=f"Failed to process file: {e}")
     finally:
         # Clean up temp file
+        if temp_file_path.exists():
+            temp_file_path.unlink()
+
+@app.post("/api/stocks/validate")
+def validate_excel(file: UploadFile = File(...), username: str = Depends(get_current_user)):
+    """
+    Upload an Excel file and validate it against the user's live portfolio.
+    Returns a row-by-row mismatch report without modifying any data.
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are allowed.")
+
+    temp_dir = Path("temp")
+    temp_dir.mkdir(exist_ok=True)
+    temp_file_path = temp_dir / f"validate_{file.filename}"
+
+    try:
+        with temp_file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        result = validate_portfolio_file(temp_file_path, username)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to validate file: {e}")
+    finally:
         if temp_file_path.exists():
             temp_file_path.unlink()
 
