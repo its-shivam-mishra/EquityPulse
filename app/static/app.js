@@ -2035,33 +2035,64 @@ async function handleValidateUploads(files) {
     results.forEach((res, idx) => {
         if (res.status === 'fulfilled' && res.value) {
             anySuccess = true;
-            const d = res.value;
+            const d    = res.value;
             const fname = files[idx].name;
 
-            // Tag every row with the source filename
+            // Tag every row with source filename and push to raw list
             d.rows.forEach(r => merged.rows.push({ ...r, _source_file: fname }));
             d.not_in_file.forEach(r => merged.not_in_file.push({ ...r, _source: 'not_in_file', _source_file: '(DB only)' }));
-
-            merged.summary.total_in_file += d.summary.total_in_file;
-            merged.summary.match         += d.summary.match;
-            merged.summary.mismatch      += d.summary.mismatch;
-            merged.summary.not_in_db     += d.summary.not_in_db;
         }
     });
 
-    // Deduplicate not_in_file (DB record might appear for each file)
+    if (!anySuccess) {
+        showToast('All files failed validation. Check the column format.', 'error');
+        return;
+    }
+
+    // ── Deduplicate rows by stock_code ──────────────────────────────────────
+    // Same stock in multiple files → one row. Source filenames are merged.
+    // The "worse" status wins so mismatches are never hidden by a passing file.
+    const STATUS_PRIORITY = { multi_mismatch: 4, price_mismatch: 3, qty_mismatch: 3, not_in_db: 2, match: 1 };
+    const rowMap = new Map(); // stock_code → merged row
+
+    merged.rows.forEach(r => {
+        const key = r.stock_code;
+        if (!rowMap.has(key)) {
+            rowMap.set(key, { ...r });
+        } else {
+            const existing = rowMap.get(key);
+
+            // Merge source file label (e.g. "A.xlsx + B.xlsx")
+            if (!existing._source_file.includes(r._source_file)) {
+                existing._source_file = existing._source_file + ' + ' + r._source_file;
+            }
+
+            // Keep the worse status so mismatches are surfaced
+            const existingPriority = STATUS_PRIORITY[existing.status] || 0;
+            const incomingPriority = STATUS_PRIORITY[r.status]        || 0;
+            if (incomingPriority > existingPriority) {
+                const mergedFile = existing._source_file; // preserve merged label
+                Object.assign(existing, r);
+                existing._source_file = mergedFile;
+            }
+        }
+    });
+    merged.rows = [...rowMap.values()];
+
+    // ── Deduplicate not_in_file (same DB record from multiple file results) ─
     const seenNIF = new Set();
     merged.not_in_file = merged.not_in_file.filter(r => {
         if (seenNIF.has(r.stock_code)) return false;
         seenNIF.add(r.stock_code);
         return true;
     });
-    merged.summary.not_in_file = merged.not_in_file.length;
 
-    if (!anySuccess) {
-        showToast('All files failed validation. Check the column format.', 'error');
-        return;
-    }
+    // ── Recompute summary from deduplicated rows ─────────────────────────────
+    merged.summary.total_in_file = merged.rows.length;
+    merged.summary.match         = merged.rows.filter(r => r.status === 'match').length;
+    merged.summary.mismatch      = merged.rows.filter(r => r.status !== 'match' && r.status !== 'not_in_db').length;
+    merged.summary.not_in_db     = merged.rows.filter(r => r.status === 'not_in_db').length;
+    merged.summary.not_in_file   = merged.not_in_file.length;
 
     _validateData = merged;
     renderValidateResults(merged);
