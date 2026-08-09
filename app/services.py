@@ -699,8 +699,32 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         for _, r in db_df.iterrows()
     }
 
-    PRICE_TOLERANCE = 0.02   # 2% tolerance for floating-point differences
-    QTY_TOLERANCE   = 0.01   # absolute units
+    PRICE_TOLERANCE = 0.02   # 2% tolerance for floating-point price differences
+    # Qty is always an integer — compare exactly
+
+    def _parse_qty(val):
+        """Parse qty from Excel: strip commas/spaces, convert to int."""
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return None
+        try:
+            cleaned = str(val).replace(",", "").replace(" ", "").strip()
+            if not cleaned or cleaned.lower() == "nan":
+                return None
+            return round(float(cleaned))
+        except (ValueError, TypeError):
+            return None
+
+    def _parse_price(val):
+        """Parse price from Excel: strip commas/₹/spaces, convert to float."""
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return None
+        try:
+            cleaned = str(val).replace(",", "").replace("\u20b9", "").replace(" ", "").strip()
+            if not cleaned or cleaned.lower() == "nan":
+                return None
+            return float(cleaned)
+        except (ValueError, TypeError):
+            return None
 
     rows = []
     seen_codes = set()
@@ -710,8 +734,8 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         if not code or code.lower() == "nan":
             continue
 
-        file_price = float(row["Buying Price"]) if pd.notna(row["Buying Price"]) else None
-        file_qty   = float(row["Quantity"])     if pd.notna(row["Quantity"])     else None
+        file_price = _parse_price(row["Buying Price"])
+        file_qty   = _parse_qty(row["Quantity"])
         file_exch  = str(row["Exchange"]).strip().upper() if pd.notna(row.get("Exchange")) else "NSE"
 
         seen_codes.add(code)
@@ -729,9 +753,9 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         }
 
         if code in db_lookup:
-            db_row = db_lookup[code]
+            db_row   = db_lookup[code]
             db_price = float(db_row["Buying Price"])
-            db_qty   = float(db_row["Quantity"])
+            db_qty   = round(float(db_row["Quantity"]))   # DB qty → int
             db_exch  = str(db_row["Exchange"]).strip().upper()
 
             entry["price_db"]    = db_price
@@ -743,8 +767,9 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
                 pct_diff = abs(file_price - db_price) / db_price if db_price else 0
                 if pct_diff > PRICE_TOLERANCE:
                     mismatches.append("price")
-            if file_qty is not None and abs(file_qty - db_qty) > QTY_TOLERANCE:
+            if file_qty is not None and file_qty != db_qty:   # exact int comparison
                 mismatches.append("qty")
+
 
             if not mismatches:
                 entry["status"] = "match"
