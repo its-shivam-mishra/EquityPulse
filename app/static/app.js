@@ -2085,7 +2085,7 @@ async function handleValidateUploads(files) {
 
     // Finalise each merged row: apply summed qty, averaged price, re-evaluate status
     merged.rows = [...rowMap.values()].map(({ row, totalQty, weightedPriceSum }) => {
-        row.qty_file = totalQty;
+        row.qty_file = Math.round(totalQty);   // qty is always an integer
 
         // Weighted-average price (fall back to original if qty is 0)
         row.price_file = totalQty > 0
@@ -2229,8 +2229,8 @@ function renderValidateTable(data, filter) {
         const priceMismatch = r.mismatches && r.mismatches.includes('price');
         const qtyMismatch   = r.mismatches && r.mismatches.includes('qty');
 
-        const fmt = v => (v != null ? `₹${Number(v).toFixed(2)}` : '—');
-        const fmtQ = v => (v != null ? Number(v) : '—');
+        const fmt  = v => (v != null ? `₹${Number(v).toFixed(2)}` : '—');
+        const fmtQ = v => (v != null ? Math.round(Number(v)) : '—');
 
         if (r._source === 'not_in_file') {
             // Only DB columns available
