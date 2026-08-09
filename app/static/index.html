@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=18">
+    <link rel="stylesheet" href="style.css?v=19">
     <link rel="stylesheet" href="auth.css?v=2">
     <style id="modal-styles">
         .modal-overlay {
@@ -434,14 +434,14 @@
                                 <table class="stock-table validate-table" id="validate-table">
                                     <thead>
                                         <tr>
-                                            <th>#</th>
-                                            <th>Stock Code</th>
-                                            <th>Company</th>
-                                            <th class="text-center">Status</th>
-                                            <th class="text-right">Buy Price (File)</th>
-                                            <th class="text-right">Buy Price (DB)</th>
-                                            <th class="text-right">Qty (File)</th>
-                                            <th class="text-right">Qty (DB)</th>
+                                            <th class="vs-sortable" data-vsort="seq">#  <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable" data-vsort="stock_code">Stock Code <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable" data-vsort="company_name">Company <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable text-center" data-vsort="status">Status <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable text-right" data-vsort="price_file">Buy Price (File) <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable text-right" data-vsort="price_db">Buy Price (DB) <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable text-right" data-vsort="qty_file">Qty (File) <i class="fa-solid fa-sort"></i></th>
+                                            <th class="vs-sortable text-right" data-vsort="qty_db">Qty (DB) <i class="fa-solid fa-sort"></i></th>
                                             <th class="text-center">Exchange</th>
                                             <th class="text-center">Source File</th>
                                         </tr>
@@ -799,7 +799,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- App JavaScript -->
-    <script src="auth.js?v=18"></script>
-    <script src="app.js?v=18"></script>
+    <script src="auth.js?v=19"></script>
+    <script src="app.js?v=19"></script>
 </body>
 </html>

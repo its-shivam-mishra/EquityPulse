@@ -2350,4 +2350,26 @@ th.sortable.active-sort i {
 #ar-countdown {
     transition: color 0.5s ease;
 }
+
+/* ── Validate table sortable column headers ────────────────── */
+.vs-sortable {
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    transition: color 0.15s, background 0.15s;
+}
+
+.vs-sortable:hover {
+    color: var(--primary-hover);
+    background: rgba(99, 102, 241, 0.06);
+}
+
+.vs-sortable.vs-th-active {
+    color: var(--primary-hover);
+}
+
+.vs-sort-active {
+    color: var(--primary-hover);
+    font-size: 0.75rem;
+}
 

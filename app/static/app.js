@@ -1946,6 +1946,8 @@ function renderAboutCompany(info) {
 
 // Store the full result set so filter tabs can re-render without re-fetching.
 let _validateData = null;
+let _vSortCol     = 'seq';   // default: original order
+let _vSortDir     = 'asc';
 
 function initValidate() {
     const dropzone  = document.getElementById('validate-dropzone');
@@ -1984,6 +1986,34 @@ function initValidate() {
             tab.classList.add('active');
             if (_validateData) renderValidateTable(_validateData, tab.dataset.filter);
         });
+    });
+
+    // Column sort headers
+    document.querySelectorAll('.vs-sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.vsort;
+            if (_vSortCol === col) {
+                _vSortDir = _vSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _vSortCol = col;
+                _vSortDir = 'asc';
+            }
+            updateVSortIcons();
+            const activeFilter = document.querySelector('.vf-tab.active');
+            if (_validateData) renderValidateTable(_validateData, activeFilter ? activeFilter.dataset.filter : 'all');
+        });
+    });
+}
+
+function updateVSortIcons() {
+    document.querySelectorAll('.vs-sortable').forEach(th => {
+        const icon = th.querySelector('i.fa-solid');
+        if (!icon) return;
+        icon.className = 'fa-solid fa-sort';    // reset
+        if (th.dataset.vsort === _vSortCol) {
+            icon.className = `fa-solid ${_vSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} vs-sort-active`;
+        }
+        th.classList.toggle('vs-th-active', th.dataset.vsort === _vSortCol);
     });
 }
 
@@ -2182,7 +2212,6 @@ function renderValidateTable(data, filter) {
     let rows = [];
 
     if (filter === 'not_in_file') {
-        // Show only DB records missing from file
         data.not_in_file.forEach(r => {
             rows.push({ ...r, _source: 'not_in_file' });
         });
@@ -2193,6 +2222,28 @@ function renderValidateTable(data, filter) {
             else if (filter === 'not_in_db' && r.status === 'not_in_db')       rows.push(r);
         });
     }
+
+    // ── Sort ──────────────────────────────────────────────────────────────────
+    if (_vSortCol && _vSortCol !== 'seq') {
+        const dir = _vSortDir === 'asc' ? 1 : -1;
+        const numericCols = new Set(['price_file', 'price_db', 'qty_file', 'qty_db']);
+
+        rows.sort((a, b) => {
+            let va = a[_vSortCol];
+            let vb = b[_vSortCol];
+
+            if (numericCols.has(_vSortCol)) {
+                va = va != null ? Number(va) : -Infinity;
+                vb = vb != null ? Number(vb) : -Infinity;
+                return (va - vb) * dir;
+            }
+            // String sort (stock_code, company_name, status)
+            va = String(va ?? '').toLowerCase();
+            vb = String(vb ?? '').toLowerCase();
+            return va < vb ? -dir : va > vb ? dir : 0;
+        });
+    }
+    // 'seq' (default) keeps the original insertion order.
 
     if (rows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding:2.5rem;color:var(--text-muted);">
