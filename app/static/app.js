@@ -2050,34 +2050,70 @@ async function handleValidateUploads(files) {
     }
 
     // ── Deduplicate rows by stock_code ──────────────────────────────────────
-    // Same stock in multiple files → one row. Source filenames are merged.
-    // The "worse" status wins so mismatches are never hidden by a passing file.
-    const STATUS_PRIORITY = { multi_mismatch: 4, price_mismatch: 3, qty_mismatch: 3, not_in_db: 2, match: 1 };
-    const rowMap = new Map(); // stock_code → merged row
+    // Same stock across multiple files → one row.
+    // qty_file is SUMMED, price_file is WEIGHTED-AVERAGED,
+    // then status is RE-EVALUATED against DB values.
+    const PRICE_TOL = 0.02;  // 2%  — must match backend tolerance
+    const QTY_TOL   = 0.01;  // absolute units
+
+    const rowMap = new Map(); // stock_code → { row, totalQty, weightedPriceSum }
 
     merged.rows.forEach(r => {
-        const key = r.stock_code;
+        const key      = r.stock_code;
+        const fileQty  = r.qty_file   != null ? Number(r.qty_file)   : 0;
+        const filePrice = r.price_file != null ? Number(r.price_file) : 0;
+
         if (!rowMap.has(key)) {
-            rowMap.set(key, { ...r });
+            rowMap.set(key, {
+                row:               { ...r },
+                totalQty:          fileQty,
+                weightedPriceSum:  filePrice * fileQty,
+            });
         } else {
-            const existing = rowMap.get(key);
+            const entry = rowMap.get(key);
+
+            // Sum quantities from all files
+            entry.totalQty         += fileQty;
+            entry.weightedPriceSum += filePrice * fileQty;
 
             // Merge source file label (e.g. "A.xlsx + B.xlsx")
-            if (!existing._source_file.includes(r._source_file)) {
-                existing._source_file = existing._source_file + ' + ' + r._source_file;
-            }
-
-            // Keep the worse status so mismatches are surfaced
-            const existingPriority = STATUS_PRIORITY[existing.status] || 0;
-            const incomingPriority = STATUS_PRIORITY[r.status]        || 0;
-            if (incomingPriority > existingPriority) {
-                const mergedFile = existing._source_file; // preserve merged label
-                Object.assign(existing, r);
-                existing._source_file = mergedFile;
+            if (!entry.row._source_file.includes(r._source_file)) {
+                entry.row._source_file += ' + ' + r._source_file;
             }
         }
     });
-    merged.rows = [...rowMap.values()];
+
+    // Finalise each merged row: apply summed qty, averaged price, re-evaluate status
+    merged.rows = [...rowMap.values()].map(({ row, totalQty, weightedPriceSum }) => {
+        row.qty_file = totalQty;
+
+        // Weighted-average price (fall back to original if qty is 0)
+        row.price_file = totalQty > 0
+            ? weightedPriceSum / totalQty
+            : row.price_file;
+
+        // Re-evaluate status against DB values
+        if (row.price_db != null) {
+            const mismatches = [];
+
+            if (row.price_file != null && row.price_db > 0) {
+                const pctDiff = Math.abs(row.price_file - row.price_db) / row.price_db;
+                if (pctDiff > PRICE_TOL) mismatches.push('price');
+            }
+
+            if (row.qty_db != null && Math.abs(row.qty_file - row.qty_db) > QTY_TOL) {
+                mismatches.push('qty');
+            }
+
+            row.mismatches = mismatches;
+            if      (mismatches.length === 0) row.status = 'match';
+            else if (mismatches.length === 1) row.status = `${mismatches[0]}_mismatch`;
+            else                              row.status = 'multi_mismatch';
+        }
+        // If price_db is null the stock is not in DB — status stays 'not_in_db'
+
+        return row;
+    });
 
     // ── Deduplicate not_in_file (same DB record from multiple file results) ─
     const seenNIF = new Set();
