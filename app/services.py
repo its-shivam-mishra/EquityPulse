@@ -625,109 +625,250 @@ def _check_portfolio_writable():
     pass
 
 
-def validate_portfolio_file(file_path: Path, username: str) -> dict:
-    """
-    Read an uploaded Excel file and compare it row-by-row against the user's
-    live portfolio in Cosmos DB.
+# ---------------------------------------------------------------------------
+# Shared Excel → DataFrame parser (handles multiple real-world file formats)
+# ---------------------------------------------------------------------------
 
-    Returns a dict with:
-      - rows: list of per-row comparison results
-      - summary: counts of match / mismatch / not_in_db / not_in_file
+# Canonical column aliases: lowercase alias → standard internal name
+_COLUMN_ALIASES: dict[str, str] = {
+    # Stock identifier
+    "stock code":       "Stock Code",
+    "stock":            "Stock Code",
+    "ticker":           "Stock Code",
+    "symbol":           "Stock Code",
+    "scrip":            "Stock Code",
+    "code":             "Stock Code",
+    # Company name
+    "company name":     "Company Name",
+    "company":          "Company Name",
+    "name":             "Company Name",
+    # Exchange
+    "exchange":         "Exchange",
+    "market":           "Exchange",
+    # Buying / average price
+    "buying price":     "Buying Price",
+    "buy price":        "Buying Price",
+    "price":            "Buying Price",
+    "avg price":        "Buying Price",
+    "average price":    "Buying Price",
+    # Quantity held
+    "quantity":         "Quantity",
+    "qty":              "Quantity",
+    "shares":           "Quantity",
+    # Broker-format extras (IndiaInfoline / Groww style)
+    "quantity available":  "Quantity",   # broker format — free qty
+    "quantity discrepant": None,          # ignored
+    "quantity long term":  None,          # ignored
+    "quantity pledged (margin)": None,    # ignored
+    "quantity pledged (loan)":   None,    # ignored
+    "isin":             None,             # ignored
+    "sector":           None,             # ignored
+    "instrument type":  None,             # ignored
+    "previous closing price": None,       # ignored
+    "unrealized p&l":   None,             # ignored
+    "unrealize p&l pct.": None,           # ignored
+    "unrealized p&l pct.": None,          # ignored
+}
+
+_REQUIRED_FIELDS = ["Stock Code", "Buying Price", "Quantity"]
+
+
+def _parse_price(val) -> float | None:
+    """Parse a price value: strip commas, ₹ signs, spaces → float."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        cleaned = str(val).replace(",", "").replace("\u20b9", "").replace(" ", "").strip()
+        if not cleaned or cleaned.lower() == "nan" or cleaned == "-":
+            return None
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_qty(val) -> int | None:
+    """Parse a quantity value: strip commas/spaces → int."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        cleaned = str(val).replace(",", "").replace(" ", "").strip()
+        if not cleaned or cleaned.lower() == "nan" or cleaned == "-":
+            return None
+        return round(float(cleaned))
+    except (ValueError, TypeError):
+        return None
+
+
+def _map_columns(columns: list[str]) -> dict[str, str]:
+    """
+    Build a rename map from raw column names → standard names.
+    Returns a dict {original_col: standard_col} for columns we care about.
+    """
+    headers_map: dict[str, str] = {}
+    for col in columns:
+        alias = str(col).strip().lower()
+        if alias in _COLUMN_ALIASES:
+            target = _COLUMN_ALIASES[alias]
+            if target is not None:          # None means explicitly ignored
+                headers_map[col] = target
+    return headers_map
+
+
+def _find_embedded_header_row(df: pd.DataFrame) -> int | None:
+    """
+    Detect broker-format files where the real column headers are buried inside
+    a block of NaN rows.  Scans rows looking for one that contains both a
+    stock-code keyword ('symbol' / 'stock code') AND a price keyword
+    ('average price' / 'buying price' / 'avg price').
+
+    Returns the (0-indexed) row index of the header row, or None if not found.
+    """
+    stock_kw  = {"symbol", "stock code", "ticker", "scrip", "stock"}
+    price_kw  = {"average price", "avg price", "buying price", "buy price", "price"}
+    qty_kw    = {"quantity", "qty", "shares", "quantity available"}
+
+    for idx, row in df.iterrows():
+        cells = {str(v).strip().lower() for v in row.values if pd.notna(v)}
+        if cells & stock_kw and cells & price_kw and cells & qty_kw:
+            return int(idx)
+    return None
+
+
+def _parse_excel_to_dataframe(file_path: Path) -> pd.DataFrame:
+    """
+    Robustly parse an uploaded Excel file into a normalised DataFrame with
+    columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.
+
+    Handles two real-world layouts:
+
+    Layout A – simple / EquityPulse export
+    ----------------------------------------
+    Headers are at row 0 (the default pandas read_excel behaviour).
+    Column names match common aliases (e.g. 'Stock Code', 'Quantity',
+    'Buying Price', 'Symbol', 'Average Price', etc.).
+
+    Layout B – broker holdings export (e.g. IndiaInfoline / Groww)
+    ---------------------------------------------------------------
+    The file may contain multiple sheets.  The first sheet with an 'Equity'
+    heading is preferred; otherwise the sheet named 'Equity' is used.
+    Inside the sheet the first ~20 rows are a summary block with all columns
+    named 'Unnamed: N'.  The real column header row is buried somewhere in
+    the data with cells like 'Symbol', 'Average Price', 'Quantity Available'.
+    After that header row the actual stock data begins.
     """
     try:
-        up_df = pd.read_excel(file_path)
-    except Exception as e:
-        raise ValueError(f"Could not parse uploaded file: {e}")
+        xl = pd.ExcelFile(file_path)
+    except Exception as exc:
+        raise ValueError(f"Could not open uploaded file: {exc}")
 
-    # Drop unnamed index columns
-    up_df = up_df.loc[:, ~up_df.columns.str.match(r'^Unnamed')]
+    sheet_names = xl.sheet_names
 
-    # Same fuzzy header resolution as merge_uploaded_file
-    exact_map = {
-        "company name": "Company Name", "company": "Company Name",
-        "stock code": "Stock Code", "stock": "Stock Code",
-        "ticker": "Stock Code", "symbol": "Stock Code", "code": "Stock Code",
-        "exchange": "Exchange", "market": "Exchange",
-        "buying price": "Buying Price", "buy price": "Buying Price",
-        "price": "Buying Price", "avg price": "Buying Price",
-        "average price": "Buying Price",
-        "quantity": "Quantity", "qty": "Quantity", "shares": "Quantity",
-    }
+    # --- Sheet selection priority ------------------------------------------
+    # Prefer a sheet literally named 'Equity'; fall back to first sheet.
+    preferred_order = ["Equity", "equity", "EQUITY"]
+    target_sheet = next((s for s in preferred_order if s in sheet_names), sheet_names[0])
 
-    headers_map = {}
-    for col in up_df.columns:
-        col_clean = str(col).strip().lower()
-        if col_clean in exact_map:
-            headers_map[col] = exact_map[col_clean]
+    # Read the chosen sheet without assuming header position
+    raw = xl.parse(target_sheet, header=None)
 
-    # Fuzzy fallback for required fields
-    required_fields = ["Stock Code", "Buying Price", "Quantity"]
-    for f in required_fields:
-        if f not in headers_map.values():
-            for col in up_df.columns:
-                if col in headers_map:
-                    continue
-                col_clean = str(col).strip().lower()
-                if f == "Stock Code" and ("stock" in col_clean or "ticker" in col_clean):
-                    headers_map[col] = "Stock Code"; break
-                if f == "Buying Price" and ("price" in col_clean or "buy" in col_clean):
-                    headers_map[col] = "Buying Price"; break
-                if f == "Quantity" and ("qty" in col_clean or "quantity" in col_clean or "share" in col_clean):
-                    headers_map[col] = "Quantity"; break
+    # --- Try Layout A first (headers at row 0) -----------------------------
+    # Treat row 0 as column headers and see if we can resolve required fields.
+    row0_headers = [str(v).strip() for v in raw.iloc[0].values]
+    headers_map_a = _map_columns(row0_headers)
 
-    for f in required_fields:
-        if f not in headers_map.values():
+    if all(f in headers_map_a.values() for f in _REQUIRED_FIELDS):
+        # Layout A confirmed — use standard read_excel from the top
+        df = xl.parse(target_sheet)   # pandas picks up row-0 headers
+        df = df.loc[:, ~df.columns.str.match(r'^Unnamed')]   # drop index cols
+        headers_map = _map_columns(list(df.columns))
+        df = df.rename(columns=headers_map)
+    else:
+        # --- Layout B — scan for an embedded header row --------------------
+        header_row_idx = _find_embedded_header_row(raw)
+        if header_row_idx is None:
             raise ValueError(
-                f"Uploaded file missing required column: '{f}'. "
-                f"Columns found: {list(up_df.columns)}."
+                "Could not detect column headers in the uploaded file. "
+                "Expected columns: Stock Code / Symbol, Buying Price / Average Price, "
+                "Quantity / Quantity Available."
             )
 
-    up_df = up_df.rename(columns=headers_map)
-    if "Company Name" not in up_df.columns:
-        up_df["Company Name"] = up_df["Stock Code"]
-    if "Exchange" not in up_df.columns:
-        up_df["Exchange"] = "NSE"
+        # Use the embedded row as headers, data starts one row below
+        header_values = [str(v).strip() for v in raw.iloc[header_row_idx].values]
+        data_rows = raw.iloc[header_row_idx + 1 :].copy()
+        data_rows.columns = header_values
 
-    up_df = up_df[["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]].dropna(subset=["Stock Code"])
-    up_df = up_df[up_df["Stock Code"].astype(str).str.strip() != ""]
+        headers_map = _map_columns(header_values)
+        if not all(f in headers_map.values() for f in _REQUIRED_FIELDS):
+            raise ValueError(
+                f"Uploaded file missing required columns. "
+                f"Detected headers: {header_values}. "
+                f"Need at minimum: Stock Code, Buying Price, Quantity."
+            )
+        df = data_rows.rename(columns=headers_map)
 
-    # Fetch live DB portfolio
+    # --- Normalise optional columns ----------------------------------------
+    if "Company Name" not in df.columns:
+        df["Company Name"] = df["Stock Code"]
+    if "Exchange" not in df.columns:
+        df["Exchange"] = "NSE"
+
+    # Keep only the canonical columns we care about
+    df = df[["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]].copy()
+
+    # Drop rows with empty / NaN stock code
+    df = df.dropna(subset=["Stock Code"])
+    df = df[df["Stock Code"].astype(str).str.strip().replace("-", "") != ""]
+    df = df[df["Stock Code"].astype(str).str.lower().str.strip() != "nan"]
+
+    # Filter out rows where price or quantity look invalid (summary / total rows)
+    df["_price"] = df["Buying Price"].apply(_parse_price)
+    df["_qty"]   = df["Quantity"].apply(_parse_qty)
+    df = df[df["_price"].notna() & df["_qty"].notna() & (df["_price"] > 0) & (df["_qty"] > 0)]
+    df = df.drop(columns=["_price", "_qty"])
+
+    df = df.reset_index(drop=True)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# validate_portfolio_file
+# ---------------------------------------------------------------------------
+
+def validate_portfolio_file(file_path: Path, username: str) -> dict:
+    """
+    Read an uploaded Excel file (any supported layout) and compare it
+    row-by-row against the user's live portfolio in Cosmos DB.
+
+    Supported file layouts
+    ----------------------
+    * Simple / EquityPulse export  — headers at row 0:
+        Stock Code | Buying Price | Quantity  (plus optional Company Name, Exchange)
+
+    * Broker holdings export (e.g. IndiaInfoline, Groww):
+        Multi-sheet workbook; the 'Equity' sheet is preferred.
+        Real column headers ('Symbol', 'Average Price', 'Quantity Available')
+        may be buried below a summary block — detected automatically.
+
+    Returns
+    -------
+    dict with:
+      rows        — list of per-row comparison dicts
+      not_in_file — stocks present in DB but absent from the uploaded file
+      summary     — counts: total_in_file, match, mismatch, not_in_db, not_in_file
+    """
+    up_df = _parse_excel_to_dataframe(file_path)   # raises ValueError on failure
+
+    # Fetch live DB portfolio and build an O(1) lookup by stock code
     db_df = read_stocks(username)
-    # Build a lookup: stock_code.upper() → row
-    db_lookup = {
+    db_lookup: dict[str, any] = {
         str(r["Stock Code"]).strip().upper(): r
         for _, r in db_df.iterrows()
     }
 
-    PRICE_TOLERANCE = 0.02   # 2% tolerance for floating-point price differences
-    # Qty is always an integer — compare exactly
+    PRICE_TOLERANCE = 0.02   # 2 % relative tolerance for float price comparison
 
-    def _parse_qty(val):
-        """Parse qty from Excel: strip commas/spaces, convert to int."""
-        if val is None or (isinstance(val, float) and pd.isna(val)):
-            return None
-        try:
-            cleaned = str(val).replace(",", "").replace(" ", "").strip()
-            if not cleaned or cleaned.lower() == "nan":
-                return None
-            return round(float(cleaned))
-        except (ValueError, TypeError):
-            return None
-
-    def _parse_price(val):
-        """Parse price from Excel: strip commas/₹/spaces, convert to float."""
-        if val is None or (isinstance(val, float) and pd.isna(val)):
-            return None
-        try:
-            cleaned = str(val).replace(",", "").replace("\u20b9", "").replace(" ", "").strip()
-            if not cleaned or cleaned.lower() == "nan":
-                return None
-            return float(cleaned)
-        except (ValueError, TypeError):
-            return None
-
-    rows = []
-    seen_codes = set()
+    rows: list[dict] = []
+    seen_codes: set[str] = set()
 
     for _, row in up_df.iterrows():
         code = str(row["Stock Code"]).strip().upper()
@@ -736,10 +877,14 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
 
         file_price = _parse_price(row["Buying Price"])
         file_qty   = _parse_qty(row["Quantity"])
-        file_exch  = str(row["Exchange"]).strip().upper() if pd.notna(row.get("Exchange")) else "NSE"
+        file_exch  = (
+            str(row["Exchange"]).strip().upper()
+            if pd.notna(row.get("Exchange"))
+            else "NSE"
+        )
 
         seen_codes.add(code)
-        entry = {
+        entry: dict = {
             "stock_code":    code,
             "company_name":  str(row.get("Company Name", code)).strip(),
             "exchange_file": file_exch,
@@ -755,21 +900,20 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         if code in db_lookup:
             db_row   = db_lookup[code]
             db_price = float(db_row["Buying Price"])
-            db_qty   = round(float(db_row["Quantity"]))   # DB qty → int
+            db_qty   = round(float(db_row["Quantity"]))
             db_exch  = str(db_row["Exchange"]).strip().upper()
 
             entry["price_db"]    = db_price
             entry["qty_db"]      = db_qty
             entry["exchange_db"] = db_exch
 
-            mismatches = []
-            if file_price is not None:
-                pct_diff = abs(file_price - db_price) / db_price if db_price else 0
+            mismatches: list[str] = []
+            if file_price is not None and db_price:
+                pct_diff = abs(file_price - db_price) / db_price
                 if pct_diff > PRICE_TOLERANCE:
                     mismatches.append("price")
-            if file_qty is not None and file_qty != db_qty:   # exact int comparison
+            if file_qty is not None and file_qty != db_qty:
                 mismatches.append("qty")
-
 
             if not mismatches:
                 entry["status"] = "match"
@@ -782,124 +926,51 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         rows.append(entry)
 
     # Stocks in DB but NOT in the uploaded file
-    not_in_file = []
-    for code, db_row in db_lookup.items():
-        if code not in seen_codes:
-            not_in_file.append({
-                "stock_code":   code,
-                "company_name": str(db_row.get("Company Name", code)).strip(),
-                "exchange_db":  str(db_row["Exchange"]).strip().upper(),
-                "price_db":     float(db_row["Buying Price"]),
-                "qty_db":       float(db_row["Quantity"]),
-            })
+    not_in_file: list[dict] = [
+        {
+            "stock_code":   code,
+            "company_name": str(db_row.get("Company Name", code)).strip(),
+            "exchange_db":  str(db_row["Exchange"]).strip().upper(),
+            "price_db":     float(db_row["Buying Price"]),
+            "qty_db":       float(db_row["Quantity"]),
+        }
+        for code, db_row in db_lookup.items()
+        if code not in seen_codes
+    ]
 
-    # Summary counts
     match_count    = sum(1 for r in rows if r["status"] == "match")
-    mismatch_count = sum(1 for r in rows if r["status"] != "match" and r["status"] != "not_in_db")
+    mismatch_count = sum(1 for r in rows if r["status"] not in {"match", "not_in_db"})
     not_in_db      = sum(1 for r in rows if r["status"] == "not_in_db")
 
     return {
-        "rows":          rows,
-        "not_in_file":   not_in_file,
+        "rows":        rows,
+        "not_in_file": not_in_file,
         "summary": {
-            "total_in_file":  len(rows),
-            "match":          match_count,
-            "mismatch":       mismatch_count,
-            "not_in_db":      not_in_db,
-            "not_in_file":    len(not_in_file),
-        }
+            "total_in_file": len(rows),
+            "match":         match_count,
+            "mismatch":      mismatch_count,
+            "not_in_db":     not_in_db,
+            "not_in_file":   len(not_in_file),
+        },
     }
 
 
 def merge_uploaded_file(file_path: Path, username: str) -> dict:
+    """
+    Read uploaded Excel (any supported layout), validate, and merge stocks
+    into the user's portfolio in Cosmos DB.
 
+    Delegates all file parsing to _parse_excel_to_dataframe so that both
+    simple files and broker holdings exports are handled identically.
     """
-    Read uploaded Excel, validate headers, and merge stocks into the main portfolio.
-    Expected columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.
-    Handles extra/unnamed index columns and fuzzy column name matching.
-    """
-    # Fail fast with a helpful message if the portfolio file is currently locked
     _check_portfolio_writable()
 
-    try:
-        up_df = pd.read_excel(file_path)
-    except Exception as e:
-        raise ValueError(f"Could not parse uploaded file: {e}")
+    up_df = _parse_excel_to_dataframe(file_path)   # raises ValueError on failure
 
-    # Drop fully unnamed/index columns
-    up_df = up_df.loc[:, ~up_df.columns.str.match(r'^Unnamed')]
-
-    # Step 1: Try exact (case-insensitive) header matches first
-    exact_map = {
-        "company name": "Company Name",
-        "company": "Company Name",
-        "stock code": "Stock Code",
-        "stock": "Stock Code",
-        "ticker": "Stock Code",
-        "symbol": "Stock Code",
-        "code": "Stock Code",
-        "exchange": "Exchange",
-        "market": "Exchange",
-        "buying price": "Buying Price",
-        "buy price": "Buying Price",
-        "price": "Buying Price",
-        "avg price": "Buying Price",
-        "average price": "Buying Price",
-        "quantity": "Quantity",
-        "qty": "Quantity",
-        "shares": "Quantity",
-    }
-
-    headers_map = {}
-    for col in up_df.columns:
-        col_clean = str(col).strip().lower()
-        if col_clean in exact_map:
-            headers_map[col] = exact_map[col_clean]
-
-    # Validate required fields
-    required_fields = ["Stock Code", "Buying Price", "Quantity"]
-    for f in required_fields:
-        if f not in headers_map.values():
-            # Attempt fuzzy match as fallback
-            for col in up_df.columns:
-                if col in headers_map:
-                    continue
-                col_clean = str(col).strip().lower()
-                if f == "Stock Code" and ("stock" in col_clean or "ticker" in col_clean or "name" in col_clean):
-                    headers_map[col] = "Stock Code"
-                    break
-                if f == "Buying Price" and ("price" in col_clean or "buy" in col_clean):
-                    headers_map[col] = "Buying Price"
-                    break
-                if f == "Quantity" and ("qty" in col_clean or "quantity" in col_clean or "share" in col_clean):
-                    headers_map[col] = "Quantity"
-                    break
-                    
-    for f in required_fields:
-        if f not in headers_map.values():
-            raise ValueError(
-                f"Uploaded file missing required column: '{f}'. "
-                f"Columns found: {list(up_df.columns)}. "
-            )
-
-    # Rename and filter
-    up_df = up_df.rename(columns=headers_map)
-    
-    # Add optional columns if missing
-    if "Company Name" not in up_df.columns:
-        up_df["Company Name"] = up_df["Stock Code"]
-    if "Exchange" not in up_df.columns:
-        up_df["Exchange"] = "NSE"
-        
-    required_cols = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]
-    up_df = up_df[required_cols].dropna(subset=["Stock Code"])
-    up_df = up_df[up_df["Stock Code"].astype(str).str.strip() != ""]
-
-    # Merge rows into portfolio
-    merged_count = 0
-    added_count = 0
-    skipped_count = 0
-    skipped_details = []
+    merged_count   = 0
+    added_count    = 0
+    skipped_count  = 0
+    skipped_details: list[str] = []
 
     for _, row in up_df.iterrows():
         c_code = str(row["Stock Code"]).strip().upper()
@@ -909,31 +980,29 @@ def merge_uploaded_file(file_path: Path, username: str) -> dict:
         try:
             c_name = str(row["Company Name"]).strip()
             c_exch = str(row["Exchange"]).strip().upper()
-            price = float(row["Buying Price"])
-            qty = float(row["Quantity"])
+            price  = _parse_price(row["Buying Price"])
+            qty    = _parse_qty(row["Quantity"])
 
-            if price <= 0 or qty <= 0:
+            if price is None or qty is None or price <= 0 or qty <= 0:
                 raise ValueError("Price and quantity must be positive numbers.")
 
-            res = add_stock(c_name, c_code, c_exch, price, qty, username)
+            res = add_stock(c_name, c_code, c_exch, float(price), float(qty), username)
             if res["action"] == "merged":
                 merged_count += 1
             else:
                 added_count += 1
         except PermissionError:
             skipped_count += 1
-            skipped_details.append(
-                f"{c_code}: Could not save — 'stocks.xlsx' is locked. "
-            )
+            skipped_details.append(f"{c_code}: Could not save — portfolio is locked.")
         except Exception as err:
             skipped_count += 1
             skipped_details.append(f"{c_code}: {err}")
 
     return {
-        "added": added_count,
-        "merged": merged_count,
-        "skipped": skipped_count,
-        "skipped_details": skipped_details
+        "added":          added_count,
+        "merged":         merged_count,
+        "skipped":        skipped_count,
+        "skipped_details": skipped_details,
     }
 
 
