@@ -631,43 +631,51 @@ def _check_portfolio_writable():
 
 # Canonical column aliases: lowercase alias → standard internal name
 _COLUMN_ALIASES: dict[str, str] = {
-    # Stock identifier
-    "stock code":       "Stock Code",
-    "stock":            "Stock Code",
-    "ticker":           "Stock Code",
-    "symbol":           "Stock Code",
-    "scrip":            "Stock Code",
-    "code":             "Stock Code",
-    # Company name
-    "company name":     "Company Name",
-    "company":          "Company Name",
-    "name":             "Company Name",
+    # Stock identifier (symbol/ticker)
+    "stock code":           "Stock Code",
+    "stock":                "Stock Code",
+    "ticker":               "Stock Code",
+    "symbol":               "Stock Code",
+    "scrip":                "Stock Code",
+    "code":                 "Stock Code",
+    # Company / stock full name (Layout C — ISIN-only broker exports)
+    "company name":         "Company Name",
+    "company":              "Company Name",
+    "name":                 "Company Name",
+    "stock name":           "Company Name",   # e.g. Motilal / Sharekhan statements
+    # ISIN — preserved so we can resolve to a ticker when no symbol column exists
+    "isin":                 "ISIN",
     # Exchange
-    "exchange":         "Exchange",
-    "market":           "Exchange",
+    "exchange":             "Exchange",
+    "market":               "Exchange",
     # Buying / average price
-    "buying price":     "Buying Price",
-    "buy price":        "Buying Price",
-    "price":            "Buying Price",
-    "avg price":        "Buying Price",
-    "average price":    "Buying Price",
+    "buying price":         "Buying Price",
+    "buy price":            "Buying Price",
+    "price":                "Buying Price",
+    "avg price":            "Buying Price",
+    "average price":        "Buying Price",
+    "average buy price":    "Buying Price",   # e.g. Motilal holdings statement
     # Quantity held
-    "quantity":         "Quantity",
-    "qty":              "Quantity",
-    "shares":           "Quantity",
+    "quantity":             "Quantity",
+    "qty":                  "Quantity",
+    "shares":               "Quantity",
     # Broker-format extras (IndiaInfoline / Groww style)
-    "quantity available":  "Quantity",   # broker format — free qty
-    "quantity discrepant": None,          # ignored
-    "quantity long term":  None,          # ignored
-    "quantity pledged (margin)": None,    # ignored
-    "quantity pledged (loan)":   None,    # ignored
-    "isin":             None,             # ignored
-    "sector":           None,             # ignored
-    "instrument type":  None,             # ignored
-    "previous closing price": None,       # ignored
-    "unrealized p&l":   None,             # ignored
-    "unrealize p&l pct.": None,           # ignored
-    "unrealized p&l pct.": None,          # ignored
+    "quantity available":   "Quantity",   # broker format — tradeable qty
+    "quantity discrepant":  None,          # ignored
+    "quantity long term":   None,          # ignored
+    "quantity pledged (margin)": None,     # ignored
+    "quantity pledged (loan)":   None,     # ignored
+    "sector":               None,          # ignored
+    "instrument type":      None,          # ignored
+    "previous closing price": None,        # ignored
+    "closing price":        None,          # ignored
+    "closing value":        None,          # ignored
+    "buy value":            None,          # ignored
+    "unrealized p&l":       None,          # ignored
+    "unrealised p&l":       None,          # ignored
+    "unrealize p&l pct.":   None,          # ignored
+    "unrealized p&l pct.":  None,          # ignored
+    "unique client code":   None,          # ignored
 }
 
 _REQUIRED_FIELDS = ["Stock Code", "Buying Price", "Quantity"]
@@ -717,21 +725,67 @@ def _map_columns(columns: list[str]) -> dict[str, str]:
 def _find_embedded_header_row(df: pd.DataFrame) -> int | None:
     """
     Detect broker-format files where the real column headers are buried inside
-    a block of NaN rows.  Scans rows looking for one that contains both a
-    stock-code keyword ('symbol' / 'stock code') AND a price keyword
-    ('average price' / 'buying price' / 'avg price').
+    a block of NaN rows.  Scans every row looking for one that satisfies at
+    least ONE of the two layouts:
 
-    Returns the (0-indexed) row index of the header row, or None if not found.
+    Layout B  (IndiaInfoline / Groww):  Symbol + Average Price + Quantity Available
+    Layout C  (Motilal / Sharekhan):    Stock Name + ISIN + Average buy price + Quantity
+
+    Returns the (0-indexed) row index of the detected header row, or None.
     """
-    stock_kw  = {"symbol", "stock code", "ticker", "scrip", "stock"}
-    price_kw  = {"average price", "avg price", "buying price", "buy price", "price"}
-    qty_kw    = {"quantity", "qty", "shares", "quantity available"}
+    # Keywords that indicate a stock *symbol / ticker* column header
+    symbol_kw   = {"symbol", "stock code", "ticker", "scrip", "stock"}
+    # Keywords that indicate a stock *name* column header (ISIN-only layouts)
+    name_kw     = {"stock name", "company name", "company", "name"}
+    # Price column keywords
+    price_kw    = {"average price", "avg price", "buying price",
+                   "buy price", "price", "average buy price"}
+    # Quantity column keywords
+    qty_kw      = {"quantity", "qty", "shares", "quantity available"}
+    # ISIN column keyword (present in Layout C)
+    isin_kw     = {"isin"}
 
     for idx, row in df.iterrows():
         cells = {str(v).strip().lower() for v in row.values if pd.notna(v)}
-        if cells & stock_kw and cells & price_kw and cells & qty_kw:
+        has_price = bool(cells & price_kw)
+        has_qty   = bool(cells & qty_kw)
+        # Layout B: symbol + price + qty
+        if cells & symbol_kw and has_price and has_qty:
+            return int(idx)
+        # Layout C: stock name + ISIN + price + qty  (no ticker column)
+        if cells & name_kw and cells & isin_kw and has_price and has_qty:
             return int(idx)
     return None
+
+
+def _resolve_isin_to_symbol(isin: str) -> str | None:
+    """
+    Resolve an ISIN code to its NSE (preferred) or BSE ticker symbol using
+    yfinance's search API.  Returns the bare ticker (without .NS/.BO suffix),
+    or None if the ISIN cannot be resolved.
+
+    Examples:
+        'INE084K01015'  →  'AMANTA'
+        'INE571B01036'  →  'JAYBARMARU'
+        'IN9148I01010'  →  None   (unlisted / not found on yfinance)
+    """
+    try:
+        results = yf.Search(isin, max_results=5)
+        quotes  = results.quotes
+    except Exception:
+        return None
+
+    if not quotes:
+        return None
+
+    # Prefer NSE (.NS) over BSE (.BO)
+    nse_hits = [q for q in quotes if q.get("symbol", "").endswith(".NS")]
+    bse_hits = [q for q in quotes if q.get("symbol", "").endswith(".BO")]
+    best = nse_hits[0] if nse_hits else (bse_hits[0] if bse_hits else quotes[0])
+
+    raw_symbol = best.get("symbol", "")
+    # Strip exchange suffix (.NS / .BO)
+    return raw_symbol.replace(".NS", "").replace(".BO", "").strip() or None
 
 
 def _parse_excel_to_dataframe(file_path: Path) -> pd.DataFrame:
@@ -739,22 +793,25 @@ def _parse_excel_to_dataframe(file_path: Path) -> pd.DataFrame:
     Robustly parse an uploaded Excel file into a normalised DataFrame with
     columns: Company Name, Stock Code, Exchange, Buying Price, Quantity.
 
-    Handles two real-world layouts:
+    Handles three real-world layouts:
 
     Layout A – simple / EquityPulse export
     ----------------------------------------
-    Headers are at row 0 (the default pandas read_excel behaviour).
-    Column names match common aliases (e.g. 'Stock Code', 'Quantity',
-    'Buying Price', 'Symbol', 'Average Price', etc.).
+    Headers at row 0.  Column names map directly to standard aliases
+    (e.g. 'Stock Code', 'Quantity', 'Buying Price').
 
-    Layout B – broker holdings export (e.g. IndiaInfoline / Groww)
+    Layout B – broker holdings export (IndiaInfoline / Groww style)
     ---------------------------------------------------------------
-    The file may contain multiple sheets.  The first sheet with an 'Equity'
-    heading is preferred; otherwise the sheet named 'Equity' is used.
-    Inside the sheet the first ~20 rows are a summary block with all columns
-    named 'Unnamed: N'.  The real column header row is buried somewhere in
-    the data with cells like 'Symbol', 'Average Price', 'Quantity Available'.
-    After that header row the actual stock data begins.
+    Multi-sheet workbook; 'Equity' sheet preferred.  Summary rows sit at the
+    top with all 'Unnamed' columns.  Real header row is detected automatically.
+    Columns include: Symbol | ISIN | Average Price | Quantity Available.
+
+    Layout C – broker holdings export with ISIN only (Motilal / Sharekhan)
+    -----------------------------------------------------------------------
+    Single sheet.  Summary rows at top with 'Unnamed' columns.  Embedded
+    header row has: Stock Name | ISIN | Quantity | Average buy price.
+    No ticker/symbol column — symbols are resolved via yf.Search(ISIN).
+    Rows whose ISIN cannot be resolved are skipped with a warning.
     """
     try:
         xl = pd.ExcelFile(file_path)
@@ -763,68 +820,109 @@ def _parse_excel_to_dataframe(file_path: Path) -> pd.DataFrame:
 
     sheet_names = xl.sheet_names
 
-    # --- Sheet selection priority ------------------------------------------
-    # Prefer a sheet literally named 'Equity'; fall back to first sheet.
+    # --- Sheet selection priority -------------------------------------------
+    # Prefer a sheet literally named 'Equity'; fall back to the first sheet.
     preferred_order = ["Equity", "equity", "EQUITY"]
     target_sheet = next((s for s in preferred_order if s in sheet_names), sheet_names[0])
 
-    # Read the chosen sheet without assuming header position
+    # Read raw (no header assumption) so we can scan all rows
     raw = xl.parse(target_sheet, header=None)
 
-    # --- Try Layout A first (headers at row 0) -----------------------------
-    # Treat row 0 as column headers and see if we can resolve required fields.
-    row0_headers = [str(v).strip() for v in raw.iloc[0].values]
+    # -----------------------------------------------------------------------
+    # Layout A: headers at row 0
+    # -----------------------------------------------------------------------
+    row0_headers  = [str(v).strip() for v in raw.iloc[0].values]
     headers_map_a = _map_columns(row0_headers)
 
     if all(f in headers_map_a.values() for f in _REQUIRED_FIELDS):
-        # Layout A confirmed — use standard read_excel from the top
-        df = xl.parse(target_sheet)   # pandas picks up row-0 headers
+        # Standard read — pandas picks up row-0 as headers
+        df = xl.parse(target_sheet)
         df = df.loc[:, ~df.columns.str.match(r'^Unnamed')]   # drop index cols
         headers_map = _map_columns(list(df.columns))
         df = df.rename(columns=headers_map)
+        isin_col_present = "ISIN" in df.columns
+
     else:
-        # --- Layout B — scan for an embedded header row --------------------
+        # -----------------------------------------------------------------------
+        # Layout B / C: embedded header row somewhere below the summary block
+        # -----------------------------------------------------------------------
         header_row_idx = _find_embedded_header_row(raw)
         if header_row_idx is None:
             raise ValueError(
                 "Could not detect column headers in the uploaded file. "
-                "Expected columns: Stock Code / Symbol, Buying Price / Average Price, "
+                "Expected columns: Stock Code / Symbol / Stock Name, "
+                "Buying Price / Average Price / Average buy price, "
                 "Quantity / Quantity Available."
             )
 
-        # Use the embedded row as headers, data starts one row below
         header_values = [str(v).strip() for v in raw.iloc[header_row_idx].values]
-        data_rows = raw.iloc[header_row_idx + 1 :].copy()
+        data_rows     = raw.iloc[header_row_idx + 1:].copy()
         data_rows.columns = header_values
 
         headers_map = _map_columns(header_values)
-        if not all(f in headers_map.values() for f in _REQUIRED_FIELDS):
+
+        # For Layout C the 'Stock Code' column won't be in headers_map yet
+        # (only Company Name + ISIN + Buying Price + Quantity are present).
+        # We accept that and resolve symbols later.
+        layout_c = (
+            "Stock Code" not in headers_map.values()
+            and "ISIN"   in headers_map.values()
+            and "Buying Price" in headers_map.values()
+            and "Quantity"     in headers_map.values()
+        )
+
+        if not layout_c and not all(f in headers_map.values() for f in _REQUIRED_FIELDS):
             raise ValueError(
-                f"Uploaded file missing required columns. "
-                f"Detected headers: {header_values}. "
-                f"Need at minimum: Stock Code, Buying Price, Quantity."
+                f"Uploaded file missing required columns.  "
+                f"Detected headers: {header_values}.  "
+                f"Need: Stock Code / Symbol / (Stock Name + ISIN), "
+                f"Buying Price / Average Price, Quantity."
             )
+
         df = data_rows.rename(columns=headers_map)
+        isin_col_present = "ISIN" in df.columns
 
     # --- Normalise optional columns ----------------------------------------
     if "Company Name" not in df.columns:
-        df["Company Name"] = df["Stock Code"]
+        df["Company Name"] = df.get("Stock Code", "")
     if "Exchange" not in df.columns:
         df["Exchange"] = "NSE"
 
-    # Keep only the canonical columns we care about
-    df = df[["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]].copy()
+    # -----------------------------------------------------------------------
+    # Layout C: resolve ISIN → Stock Code when no symbol column exists
+    # -----------------------------------------------------------------------
+    if "Stock Code" not in df.columns and isin_col_present:
+        resolved_codes: list[str | None] = []
+        for _, row in df.iterrows():
+            isin_val = str(row.get("ISIN", "")).strip()
+            if not isin_val or isin_val.lower() == "nan":
+                resolved_codes.append(None)
+            else:
+                resolved_codes.append(_resolve_isin_to_symbol(isin_val))
+        df["Stock Code"] = resolved_codes
 
-    # Drop rows with empty / NaN stock code
+    # Keep only canonical columns
+    keep_cols = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity"]
+    if isin_col_present:
+        keep_cols.insert(2, "ISIN")   # carry ISIN through for reference
+    available = [c for c in keep_cols if c in df.columns]
+    df = df[available].copy()
+
+    # Drop rows with empty / NaN / unresolved Stock Code
     df = df.dropna(subset=["Stock Code"])
-    df = df[df["Stock Code"].astype(str).str.strip().replace("-", "") != ""]
+    df = df[df["Stock Code"].astype(str).str.strip() != ""]
     df = df[df["Stock Code"].astype(str).str.lower().str.strip() != "nan"]
+    df = df[df["Stock Code"].astype(str).str.strip() != "-"]
 
-    # Filter out rows where price or quantity look invalid (summary / total rows)
+    # Filter out rows whose price or quantity are invalid (summary/total rows)
     df["_price"] = df["Buying Price"].apply(_parse_price)
     df["_qty"]   = df["Quantity"].apply(_parse_qty)
     df = df[df["_price"].notna() & df["_qty"].notna() & (df["_price"] > 0) & (df["_qty"] > 0)]
     df = df.drop(columns=["_price", "_qty"])
+
+    # Ensure Exchange column exists after potential ISIN-column insertion
+    if "Exchange" not in df.columns:
+        df["Exchange"] = "NSE"
 
     df = df.reset_index(drop=True)
     return df
@@ -887,6 +985,7 @@ def validate_portfolio_file(file_path: Path, username: str) -> dict:
         entry: dict = {
             "stock_code":    code,
             "company_name":  str(row.get("Company Name", code)).strip(),
+            "isin":          str(row["ISIN"]).strip() if "ISIN" in up_df.columns and pd.notna(row.get("ISIN")) else None,
             "exchange_file": file_exch,
             "price_file":    file_price,
             "qty_file":      file_qty,
