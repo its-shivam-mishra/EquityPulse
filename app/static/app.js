@@ -2083,7 +2083,6 @@ async function handleValidateUploads(files) {
     // Same stock across multiple files → one row.
     // qty_file is SUMMED, price_file is WEIGHTED-AVERAGED,
     // then status is RE-EVALUATED against DB values.
-    const PRICE_TOL = 0.02;  // 2%  — must match backend tolerance
     const QTY_TOL   = 0.01;  // absolute units
 
     const rowMap = new Map(); // stock_code → { row, totalQty, weightedPriceSum }
@@ -2125,11 +2124,6 @@ async function handleValidateUploads(files) {
         // Re-evaluate status against DB values
         if (row.price_db != null) {
             const mismatches = [];
-
-            if (row.price_file != null && row.price_db > 0) {
-                const pctDiff = Math.abs(row.price_file - row.price_db) / row.price_db;
-                if (pctDiff > PRICE_TOL) mismatches.push('price');
-            }
 
             if (row.qty_db != null && Math.abs(row.qty_file - row.qty_db) > QTY_TOL) {
                 mismatches.push('qty');
@@ -2277,7 +2271,6 @@ function renderValidateTable(data, filter) {
             ? `<span class="validate-diff">${val}</span>`
             : val;
 
-        const priceMismatch = r.mismatches && r.mismatches.includes('price');
         const qtyMismatch   = r.mismatches && r.mismatches.includes('qty');
 
         const fmt  = v => (v != null ? `₹${Number(v).toFixed(2)}` : '—');
@@ -2305,8 +2298,8 @@ function renderValidateTable(data, filter) {
                 <td><strong>${r.stock_code}</strong></td>
                 <td>${r.company_name || '—'}</td>
                 <td class="text-center">${statusBadge}</td>
-                <td class="text-right ${priceMismatch ? 'vr-mismatch-cell' : ''}">${h(fmt(r.price_file), priceMismatch)}</td>
-                <td class="text-right ${priceMismatch ? 'vr-mismatch-cell' : ''}">${h(fmt(r.price_db), priceMismatch)}</td>
+                <td class="text-right">${fmt(r.price_file)}</td>
+                <td class="text-right">${fmt(r.price_db)}</td>
                 <td class="text-right ${qtyMismatch ? 'vr-mismatch-cell' : ''}">${h(fmtQ(r.qty_file), qtyMismatch)}</td>
                 <td class="text-right ${qtyMismatch ? 'vr-mismatch-cell' : ''}">${h(fmtQ(r.qty_db), qtyMismatch)}</td>
                 <td class="text-center">${r.exchange_file || r.exchange_db || '—'}</td>

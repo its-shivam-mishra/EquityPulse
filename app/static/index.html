@@ -1,69 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EquityPulse - Indian Stock Portfolio Analyser</title>
+    <title>EquityPulse - Indian Stock Portfolio Analyser V 2.0</title>
     <!-- Google Fonts -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EquityPulse - Indian Stock Portfolio Analyser</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css?v=19">
-    <link rel="stylesheet" href="auth.css?v=2">
-    <style id="modal-styles">
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex; justify-content: center; align-items: center;
-            z-index: 1000; backdrop-filter: blur(4px); transition: opacity 0.3s ease;
-        }
-        .modal-overlay.hidden {
-            opacity: 0; pointer-events: none; display: none !important;
-        }
-        .modal-card {
-            background-color: var(--bg-card); border-radius: 12px; padding: 1.5rem;
-            width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            border: 1px solid var(--border-color); animation: modalSlideIn 0.3s ease-out;
-        }
-        .modal-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
-        }
-        .modal-header h3 { margin: 0; color: var(--text-main); }
-        .btn-close-modal {
-            background: none; border: none; color: var(--text-muted); font-size: 1.2rem;
-            cursor: pointer; transition: color 0.2s;
-        }
-        .btn-close-modal:hover { color: var(--danger); }
-        @keyframes modalSlideIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
-</head>
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>EquityPulse - Indian Stock Portfolio Analyser</title>
+        <!-- Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+            rel="stylesheet">
+        <!-- FontAwesome Icons -->
+        <!-- FontAwesome Icons -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <!-- Chart.js CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <link rel="stylesheet" href="style.css?v=19">
+        <link rel="stylesheet" href="auth.css?v=2">
+        <style id="modal-styles">
+            .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+                backdrop-filter: blur(4px);
+                transition: opacity 0.3s ease;
+            }
+
+            .modal-overlay.hidden {
+                opacity: 0;
+                pointer-events: none;
+                display: none !important;
+            }
+
+            .modal-card {
+                background-color: var(--bg-card);
+                border-radius: 12px;
+                padding: 1.5rem;
+                width: 100%;
+                max-width: 500px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+                border: 1px solid var(--border-color);
+                animation: modalSlideIn 0.3s ease-out;
+            }
+
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1.5rem;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 1rem;
+            }
+
+            .modal-header h3 {
+                margin: 0;
+                color: var(--text-main);
+            }
+
+            .btn-close-modal {
+                background: none;
+                border: none;
+                color: var(--text-muted);
+                font-size: 1.2rem;
+                cursor: pointer;
+                transition: color 0.2s;
+            }
+
+            .btn-close-modal:hover {
+                color: var(--danger);
+            }
+
+            @keyframes modalSlideIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-20px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        </style>
+    </head>
+
 <body>
     <!-- Auth Container -->
     <div id="auth-container" class="auth-container">
         <div class="auth-card">
             <div class="auth-header">
                 <img src="logo.png" alt="EquityPulse Logo" class="auth-logo">
-                <h2>Welcome to EquityPulse</h2>
+                <h2>Welcome to EquityPulse v 2.0</h2>
                 <p>Sign in to manage your portfolio</p>
             </div>
-            
+
             <!-- Login Form -->
             <form id="login-form" class="auth-form">
                 <div class="form-group">
@@ -95,711 +141,801 @@
     </div>
 
     <div id="main-app" style="display: none;">
-    <div class="app-container">
-        <!-- Top Navigation -->
-        <nav class="top-nav">
-            <div class="logo-area">
-                <div class="brand-group">
-                    <img src="logo.png" alt="EquityPulse Logo" class="pulse-logo-img">
-                    <h2 class="brand-text">EquityPulse</h2>
+        <div class="app-container">
+            <!-- Top Navigation -->
+            <nav class="top-nav">
+                <div class="logo-area">
+                    <div class="brand-group">
+                        <img src="logo.png" alt="EquityPulse Logo" class="pulse-logo-img">
+                        <h2 class="brand-text">EquityPulse</h2>
+                    </div>
                 </div>
-            </div>
-            <div class="nav-menu">
-                <button class="nav-item active" data-target="dashboard-view" id="nav-dashboard">
-                    <i class="fa-solid fa-wallet"></i>
-                    <span>My Portfolio</span>
-                </button>
-                <button class="nav-item" data-target="add-view" id="nav-add">
-                    <i class="fa-solid fa-plus-circle"></i>
-                    <span>Add / Update Stock</span>
-                </button>
-                <button class="nav-item" data-target="trends-view" id="nav-trends">
-                    <i class="fa-solid fa-chart-line"></i>
-                    <span>Trends</span>
-                </button>
-                <button class="nav-item" data-target="upload-view" id="nav-upload">
-                    <i class="fa-solid fa-file-excel"></i>
-                    <span>Import Excel</span>
-                </button>
-                <button class="nav-item" data-target="validate-view" id="nav-validate">
-                    <i class="fa-solid fa-clipboard-check"></i>
-                    <span>Validate Portfolio</span>
-                </button>
-            </div>
-            <div class="nav-footer">
-                <div class="exchange-tag">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>NSE & BSE Market Only</span>
+                <div class="nav-menu">
+                    <button class="nav-item active" data-target="dashboard-view" id="nav-dashboard">
+                        <i class="fa-solid fa-wallet"></i>
+                        <span>My Portfolio</span>
+                    </button>
+                    <button class="nav-item" data-target="add-view" id="nav-add">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>Add / Update Stock</span>
+                    </button>
+                    <button class="nav-item" data-target="trends-view" id="nav-trends">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span>Trends</span>
+                    </button>
+                    <button class="nav-item" data-target="upload-view" id="nav-upload">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Import Excel</span>
+                    </button>
+                    <button class="nav-item" data-target="validate-view" id="nav-validate">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                        <span>Validate Portfolio</span>
+                    </button>
                 </div>
-                <button id="btn-logout" class="btn btn-secondary" style="margin-left: 1rem;">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </button>
-            </div>
-        </nav>
+                <div class="nav-footer">
+                    <div class="exchange-tag">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>NSE & BSE Market Only</span>
+                    </div>
+                    <button id="btn-logout" class="btn btn-secondary" style="margin-left: 1rem;">
+                        <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    </button>
+                </div>
+            </nav>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Header Portfolio Summary Badges -->
-            <header class="top-header">
-                <div class="header-title-wrapper">
-                    <h1>Portfolio Overview</h1>
-                    <p class="subtitle">Live tracking, Simple Moving Averages, and performance analysis</p>
-                </div>
-                <div class="portfolio-summary">
-                    <div class="summary-card investment">
-                        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
-                        <div class="card-info">
-                            <span class="label" style="display: flex; align-items: center;">Total Invested <i class="fa-solid fa-eye-slash" id="toggle-mask-icon" title="Toggle visibility" style="cursor: pointer; margin-left: 8px; font-size: 1.1em; opacity: 0.8; transition: opacity 0.2s;"></i></span>
-                            <span class="value" id="total-investment">₹******</span>
+            <!-- Main Content Area -->
+            <main class="main-content">
+                <!-- Header Portfolio Summary Badges -->
+                <header class="top-header">
+                    <div class="header-title-wrapper">
+                        <h1>Portfolio Overview</h1>
+                        <p class="subtitle">Live tracking, Simple Moving Averages, and performance analysis</p>
+                    </div>
+                    <div class="portfolio-summary">
+                        <div class="summary-card investment">
+                            <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                            <div class="card-info">
+                                <span class="label" style="display: flex; align-items: center;">Total Invested <i
+                                        class="fa-solid fa-eye-slash" id="toggle-mask-icon" title="Toggle visibility"
+                                        style="cursor: pointer; margin-left: 8px; font-size: 1.1em; opacity: 0.8; transition: opacity 0.2s;"></i></span>
+                                <span class="value" id="total-investment">₹******</span>
+                            </div>
+                        </div>
+                        <div class="summary-card current-value">
+                            <div class="card-icon"><i class="fa-solid fa-vault"></i></div>
+                            <div class="card-info">
+                                <span class="label">Current Value</span>
+                                <span class="value" id="total-current-value">₹******</span>
+                            </div>
+                        </div>
+                        <div class="summary-card return-rate">
+                            <div class="card-icon" id="return-icon-wrapper"><i class="fa-solid fa-arrow-trend-up"></i>
+                            </div>
+                            <div class="card-info">
+                                <span class="label">Total Return</span>
+                                <span class="value" id="total-return">₹0.00</span>
+                                <span class="percentage" id="total-return-pct">(0.00%)</span>
+                            </div>
+                        </div>
+                        <div class="summary-card today-return">
+                            <div class="card-icon" id="today-return-icon-wrapper"><i
+                                    class="fa-solid fa-calendar-day"></i></div>
+                            <div class="card-info">
+                                <span class="label">Today's Return</span>
+                                <span class="value" id="today-return-val">₹0.00</span>
+                                <span class="percentage" id="today-return-pct">(0.00%)</span>
+                            </div>
+                        </div>
+                        <div class="summary-card index-smallcap">
+                            <div class="card-icon" id="smallcap-icon-wrapper"><i class="fa-solid fa-chart-pie"></i>
+                            </div>
+                            <div class="card-info">
+                                <span class="label">Nifty SmallCap 100</span>
+                                <span class="value" id="smallcap-val">Loading...</span>
+                                <span class="percentage" id="smallcap-pct">(--%)</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="summary-card current-value">
-                        <div class="card-icon"><i class="fa-solid fa-vault"></i></div>
-                        <div class="card-info">
-                            <span class="label">Current Value</span>
-                            <span class="value" id="total-current-value">₹******</span>
-                        </div>
-                    </div>
-                    <div class="summary-card return-rate">
-                        <div class="card-icon" id="return-icon-wrapper"><i class="fa-solid fa-arrow-trend-up"></i></div>
-                        <div class="card-info">
-                            <span class="label">Total Return</span>
-                            <span class="value" id="total-return">₹0.00</span>
-                            <span class="percentage" id="total-return-pct">(0.00%)</span>
-                        </div>
-                    </div>
-                    <div class="summary-card today-return">
-                        <div class="card-icon" id="today-return-icon-wrapper"><i class="fa-solid fa-calendar-day"></i></div>
-                        <div class="card-info">
-                            <span class="label">Today's Return</span>
-                            <span class="value" id="today-return-val">₹0.00</span>
-                            <span class="percentage" id="today-return-pct">(0.00%)</span>
-                        </div>
-                    </div>
-                    <div class="summary-card index-smallcap">
-                        <div class="card-icon" id="smallcap-icon-wrapper"><i class="fa-solid fa-chart-pie"></i></div>
-                        <div class="card-info">
-                            <span class="label">Nifty SmallCap 100</span>
-                            <span class="value" id="smallcap-val">Loading...</span>
-                            <span class="percentage" id="smallcap-pct">(--%)</span>
-                        </div>
-                    </div>
-                </div>
-            </header>
+                </header>
 
-            <!-- Dynamic Views Container -->
-            <section class="view-container">
-                
-                <!-- VIEW 1: DASHBOARD / STOCKS TABLE -->
-                <div id="dashboard-view" class="app-view active">
-                    <div class="card table-card">
-                        <div class="table-header">
-                            <h3>Stock Holdings</h3>
-                            <div style="display: flex; gap: 10px;">
-                                <div class="search-container" style="position: relative;">
-                                    <i class="fa-solid fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
-                                    <input type="text" id="stock-search" placeholder="Search portfolio..." style="padding: 0.5rem 1rem 0.5rem 2.2rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); width: 220px; font-family: 'Inter', sans-serif; font-size: 0.85rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s;">
-                                </div>
-                                <div class="view-options-wrapper" style="position: relative; z-index: 100;">
-                                    <button class="btn btn-secondary btn-icon" id="btn-view-options">
-                                        <i class="fa-solid fa-list-check"></i> Columns
-                                    </button>
-                                    <div id="column-dropdown" class="dropdown-menu hidden" style="position: absolute; right: 0; top: 110%; background: var(--bg-card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; width: 220px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                                        <h4 style="margin-bottom: 0.75rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-main);">Show / Hide Columns</h4>
-                                        <div class="column-toggles" id="column-toggles-list" style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem; color: var(--text-main);">
-                                            <!-- Dynamically populated -->
+                <!-- Dynamic Views Container -->
+                <section class="view-container">
+
+                    <!-- VIEW 1: DASHBOARD / STOCKS TABLE -->
+                    <div id="dashboard-view" class="app-view active">
+                        <div class="card table-card">
+                            <div class="table-header">
+                                <h3>Stock Holdings</h3>
+                                <div style="display: flex; gap: 10px;">
+                                    <div class="search-container" style="position: relative;">
+                                        <i class="fa-solid fa-search"
+                                            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
+                                        <input type="text" id="stock-search" placeholder="Search portfolio..."
+                                            style="padding: 0.5rem 1rem 0.5rem 2.2rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); width: 220px; font-family: 'Inter', sans-serif; font-size: 0.85rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s;">
+                                    </div>
+                                    <div class="view-options-wrapper" style="position: relative; z-index: 100;">
+                                        <button class="btn btn-secondary btn-icon" id="btn-view-options">
+                                            <i class="fa-solid fa-list-check"></i> Columns
+                                        </button>
+                                        <div id="column-dropdown" class="dropdown-menu hidden"
+                                            style="position: absolute; right: 0; top: 110%; background: var(--bg-card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; width: 220px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                                            <h4
+                                                style="margin-bottom: 0.75rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-main);">
+                                                Show / Hide Columns</h4>
+                                            <div class="column-toggles" id="column-toggles-list"
+                                                style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem; color: var(--text-main);">
+                                                <!-- Dynamically populated -->
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <button class="btn btn-secondary btn-icon auto-refresh-btn" id="refresh-stocks" title="Auto-refreshes every 60s. Click to refresh now.">
-                                    <!-- SVG countdown ring -->
-                                    <span class="ar-ring-wrap">
-                                        <svg class="ar-ring" viewBox="0 0 36 36" width="22" height="22">
-                                            <circle class="ar-ring-bg" cx="18" cy="18" r="15.9" />
-                                            <circle class="ar-ring-arc" id="ar-ring-arc" cx="18" cy="18" r="15.9"
-                                                stroke-dasharray="100 100"
-                                                stroke-dashoffset="0" />
-                                        </svg>
-                                        <i class="fa-solid fa-arrows-rotate ar-icon"></i>
-                                    </span>
-                                    <span class="ar-label">
-                                        <span id="ar-countdown">60</span>s
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="stock-table" id="stock-list-table">
-                                <thead>
-                                    <tr>
-                                        <th class="text-center col-seq">#</th>
-                                        <th class="sortable" data-sort="company_name">Stock Name <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="quantity">Qty <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="buying_price">Buy Price <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="current_price">Current Price <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="investment_value">Investment <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable" data-sort="current_value">Current Value <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-right sortable dual-sort-th" data-sort="today_return_val" data-sort-abs="today_return_val" data-sort-pct="today_change_pct" id="th-today-return">
-                                            <div class="th-dual-sort">
-                                                <span class="th-label">Today's Return <i class="fa-solid fa-sort"></i></span>
-                                                <button class="sort-mode-pill" id="pill-today-return" data-mode="abs" title="Switch sort: ₹ absolute / % percent">₹</button>
-                                            </div>
-                                        </th>
-                                        <th class="text-right sortable dual-sort-th" data-sort="gain_loss" data-sort-abs="gain_loss" data-sort-pct="gain_loss_pct" id="th-gain-loss">
-                                            <div class="th-dual-sort">
-                                                <span class="th-label">Gain / Loss <i class="fa-solid fa-sort"></i></span>
-                                                <button class="sort-mode-pill" id="pill-gain-loss" data-mode="abs" title="Switch sort: ₹ absolute / % percent">₹</button>
-                                            </div>
-                                        </th>
-                                        <th class="text-center sortable" data-sort="tag">Tag <i class="fa-solid fa-sort"></i></th>
-                                        <th class="text-center">SMA Status (20/50/100/200)</th>
-                                        <th class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="stock-table-body">
-                                    <!-- Dynamic rows inserted here -->
-                                    <tr class="placeholder-row">
-                                        <td colspan="10" class="text-center">
-                                            <div class="loading-spinner-wrapper">
-                                                <div class="spinner"></div>
-                                                <p>Fetching portfolio data...</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- VIEW 2: ADD / UPDATE STOCK FORM -->
-                <div id="add-view" class="app-view">
-                    <div class="card form-card">
-                        <div class="card-header">
-                            <h3>Add or Update Transaction</h3>
-                            <p class="hint-text">If the stock symbol already exists, its quantity will increase, and the buying price will update to a weighted average.</p>
-                        </div>
-                        <form id="stock-form" class="form-grid">
-                            <div class="form-group">
-                                <label for="stock-company-name">Company Name <span class="required">*</span></label>
-                                <input type="text" id="stock-company-name" placeholder="e.g. Reliance Industries" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="stock-code">Stock Code <span class="required">*</span></label>
-                                <input type="text" id="stock-code" placeholder="e.g. RELIANCE, TCS" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="stock-exchange">Exchange <span class="required">*</span></label>
-                                <select id="stock-exchange" required>
-                                    <option value="NSE">NSE</option>
-                                    <option value="BSE">BSE</option>
-                                </select>
-                            </div>
-                            <div class="form-group" style="grid-column: 1 / -1;">
-                                <label for="stock-tag">Tag <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
-                                <input type="text" id="stock-tag" placeholder="e.g. Tech, Core, Dividend">
-                            </div>
-                            <div class="form-group">
-                                <label for="stock-price">Buying Price (₹) <span class="required">*</span></label>
-                                <input type="number" id="stock-price" step="0.01" min="0.01" placeholder="Buying price per share" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="stock-qty">Quantity <span class="required">*</span></label>
-                                <input type="number" id="stock-qty" step="1" min="1" placeholder="Number of shares" required>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary" id="btn-submit-stock">
-                                    <i class="fa-solid fa-save"></i> Save Holding
-                                </button>
-                                <button type="reset" class="btn btn-tertiary">
-                                    Reset Form
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- VIEW 3: UPLOAD EXCEL FILE -->
-                <div id="upload-view" class="app-view">
-                    <div class="card upload-card">
-                        <div class="card-header">
-                            <h3>Excel Portfolio Import</h3>
-                            <p class="hint-text">Upload an Excel sheet to bulk merge holdings. Duplicate stock entries will merge automatically by recalculating average buying price.</p>
-                        </div>
-                        <div class="upload-area" id="dropzone">
-                            <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
-                            <h4>Drag & Drop your Excel file here</h4>
-                            <p>or</p>
-                            <label for="excel-file-input" class="btn btn-secondary">
-                                <i class="fa-solid fa-folder-open"></i> Browse Files
-                            </label>
-                            <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display: none;">
-                            <span class="file-format-info">Supported formats: .xlsx, .xls</span>
-                        </div>
-                        <div class="excel-format-guide">
-                            <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
-                            <p>Your Excel file should contain a sheet with at least these columns (headers can be case-insensitive):</p>
-                            <div class="columns-badge-container">
-                                <span class="badge">Company Name</span>
-                                <span class="badge">Stock Code</span>
-                                <span class="badge">Exchange</span>
-                                <span class="badge">Buying Price</span>
-                                <span class="badge">Quantity</span>
-                            </div>
-                        </div>
-                        <!-- Upload results modal / box -->
-                        <div class="upload-result-box hidden" id="upload-result">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- VIEW: VALIDATE PORTFOLIO -->
-                <div id="validate-view" class="app-view">
-                    <div class="card upload-card" id="validate-upload-card">
-                        <div class="card-header">
-                            <h3><i class="fa-solid fa-clipboard-check" style="color:var(--primary-hover);margin-right:0.5rem;"></i>Portfolio Validator</h3>
-                            <p class="hint-text">Upload your Excel stock list to compare it against your live database records. No data will be modified.</p>
-                        </div>
-                        <div class="upload-area" id="validate-dropzone">
-                            <i class="fa-solid fa-magnifying-glass-chart cloud-icon"></i>
-                            <h4>Drag &amp; Drop one or more Excel files</h4>
-                            <p>or</p>
-                            <label for="validate-file-input" class="btn btn-secondary">
-                                <i class="fa-solid fa-folder-open"></i> Browse Files
-                            </label>
-                            <input type="file" id="validate-file-input" accept=".xlsx, .xls" multiple style="display: none;">
-                            <span class="file-format-info">Supported formats: .xlsx, .xls &nbsp;·&nbsp; Multiple files allowed</span>
-                            <!-- Selected file chips -->
-                            <div id="validate-file-list" class="validate-file-chips hidden"></div>
-                        </div>
-                        <div class="excel-format-guide">
-                            <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
-                            <p>Your file must contain at least:</p>
-                            <div class="columns-badge-container">
-                                <span class="badge">Stock Code</span>
-                                <span class="badge">Buying Price</span>
-                                <span class="badge">Quantity</span>
-                            </div>
-                            <p style="margin-top:0.6rem;font-size:0.82rem;color:var(--text-muted);">Buying Price is compared with a ±2% tolerance. Quantity must match exactly.</p>
-                        </div>
-                    </div>
-
-                    <!-- Validation Results -->
-                    <div id="validate-results" class="hidden" style="margin-top:1.5rem;">
-
-                        <!-- Summary Strip -->
-                        <div class="validate-summary-strip" id="validate-summary-strip">
-                            <div class="vs-card vs-match">
-                                <i class="fa-solid fa-circle-check"></i>
-                                <div>
-                                    <span class="vs-count" id="vs-match-count">0</span>
-                                    <span class="vs-label">Matched</span>
+                                    <button class="btn btn-secondary btn-icon auto-refresh-btn" id="refresh-stocks"
+                                        title="Auto-refreshes every 60s. Click to refresh now.">
+                                        <!-- SVG countdown ring -->
+                                        <span class="ar-ring-wrap">
+                                            <svg class="ar-ring" viewBox="0 0 36 36" width="22" height="22">
+                                                <circle class="ar-ring-bg" cx="18" cy="18" r="15.9" />
+                                                <circle class="ar-ring-arc" id="ar-ring-arc" cx="18" cy="18" r="15.9"
+                                                    stroke-dasharray="100 100" stroke-dashoffset="0" />
+                                            </svg>
+                                            <i class="fa-solid fa-arrows-rotate ar-icon"></i>
+                                        </span>
+                                        <span class="ar-label">
+                                            <span id="ar-countdown">60</span>s
+                                        </span>
+                                    </button>
                                 </div>
                             </div>
-                            <div class="vs-card vs-mismatch">
-                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                <div>
-                                    <span class="vs-count" id="vs-mismatch-count">0</span>
-                                    <span class="vs-label">Mismatched</span>
-                                </div>
-                            </div>
-                            <div class="vs-card vs-notdb">
-                                <i class="fa-solid fa-circle-question"></i>
-                                <div>
-                                    <span class="vs-count" id="vs-notdb-count">0</span>
-                                    <span class="vs-label">Not in DB</span>
-                                </div>
-                            </div>
-                            <div class="vs-card vs-notfile">
-                                <i class="fa-solid fa-file-circle-xmark"></i>
-                                <div>
-                                    <span class="vs-count" id="vs-notfile-count">0</span>
-                                    <span class="vs-label">Not in File</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Filter Tabs -->
-                        <div class="validate-filter-tabs" id="validate-filter-tabs">
-                            <button class="vf-tab active" data-filter="all">All</button>
-                            <button class="vf-tab" data-filter="mismatch">Mismatches Only</button>
-                            <button class="vf-tab" data-filter="not_in_db">Not in DB</button>
-                            <button class="vf-tab" data-filter="not_in_file">Not in File</button>
-                        </div>
-
-                        <!-- Main Results Table -->
-                        <div class="card" style="padding:0;overflow:visible;">
                             <div class="table-responsive">
-                                <table class="stock-table validate-table" id="validate-table">
+                                <table class="stock-table" id="stock-list-table">
                                     <thead>
                                         <tr>
-                                            <th class="vs-sortable" data-vsort="seq">#  <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable" data-vsort="stock_code">Stock Code <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable" data-vsort="company_name">Company <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable text-center" data-vsort="status">Status <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable text-right" data-vsort="price_file">Buy Price (File) <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable text-right" data-vsort="price_db">Buy Price (DB) <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable text-right" data-vsort="qty_file">Qty (File) <i class="fa-solid fa-sort"></i></th>
-                                            <th class="vs-sortable text-right" data-vsort="qty_db">Qty (DB) <i class="fa-solid fa-sort"></i></th>
-                                            <th class="text-center">Exchange</th>
-                                            <th class="text-center">Source File</th>
+                                            <th class="text-center col-seq">#</th>
+                                            <th class="sortable" data-sort="company_name">Stock Name <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sort="quantity">Qty <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sort="buying_price">Buy Price <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sort="current_price">Current Price <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sort="investment_value">Investment <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sort="current_value">Current Value <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable dual-sort-th" data-sort="today_return_val"
+                                                data-sort-abs="today_return_val" data-sort-pct="today_change_pct"
+                                                id="th-today-return">
+                                                <div class="th-dual-sort">
+                                                    <span class="th-label">Today's Return <i
+                                                            class="fa-solid fa-sort"></i></span>
+                                                    <button class="sort-mode-pill" id="pill-today-return"
+                                                        data-mode="abs"
+                                                        title="Switch sort: ₹ absolute / % percent">₹</button>
+                                                </div>
+                                            </th>
+                                            <th class="text-right sortable dual-sort-th" data-sort="gain_loss"
+                                                data-sort-abs="gain_loss" data-sort-pct="gain_loss_pct"
+                                                id="th-gain-loss">
+                                                <div class="th-dual-sort">
+                                                    <span class="th-label">Gain / Loss <i
+                                                            class="fa-solid fa-sort"></i></span>
+                                                    <button class="sort-mode-pill" id="pill-gain-loss" data-mode="abs"
+                                                        title="Switch sort: ₹ absolute / % percent">₹</button>
+                                                </div>
+                                            </th>
+                                            <th class="text-center sortable" data-sort="tag">Tag <i
+                                                    class="fa-solid fa-sort"></i></th>
+                                            <th class="text-center">SMA Status (20/50/100/200)</th>
+                                            <th class="text-center">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="validate-table-body">
-                                        <!-- Populated by JS -->
+                                    <tbody id="stock-table-body">
+                                        <!-- Dynamic rows inserted here -->
+                                        <tr class="placeholder-row">
+                                            <td colspan="10" class="text-center">
+                                                <div class="loading-spinner-wrapper">
+                                                    <div class="spinner"></div>
+                                                    <p>Fetching portfolio data...</p>
+                                                </div>
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
+                    </div>
 
-                    </div><!-- /validate-results -->
-                </div><!-- /validate-view -->
-
-                <!-- VIEW 4: STOCK DETAILS & SMA ANALYSIS -->
-                <div id="details-view" class="app-view">
-                    <div class="details-grid">
-                        <!-- Left Panel: Chart & Ticker Overview -->
-                        <div class="card detail-chart-card">
-                            <div class="detail-header">
-                                <div class="ticker-identity">
-                                    <button class="btn btn-link btn-back" id="btn-back-dashboard">
-                                        <i class="fa-solid fa-arrow-left"></i> Back to Portfolio
+                    <!-- VIEW 2: ADD / UPDATE STOCK FORM -->
+                    <div id="add-view" class="app-view">
+                        <div class="card form-card">
+                            <div class="card-header">
+                                <h3>Add or Update Transaction</h3>
+                                <p class="hint-text">If the stock symbol already exists, its quantity will increase, and
+                                    the buying price will update to a weighted average.</p>
+                            </div>
+                            <form id="stock-form" class="form-grid">
+                                <div class="form-group">
+                                    <label for="stock-company-name">Company Name <span class="required">*</span></label>
+                                    <input type="text" id="stock-company-name" placeholder="e.g. Reliance Industries"
+                                        required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="stock-code">Stock Code <span class="required">*</span></label>
+                                    <input type="text" id="stock-code" placeholder="e.g. RELIANCE, TCS" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="stock-exchange">Exchange <span class="required">*</span></label>
+                                    <select id="stock-exchange" required>
+                                        <option value="NSE">NSE</option>
+                                        <option value="BSE">BSE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="stock-tag">Tag <span class="optional"
+                                            style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                                    <input type="text" id="stock-tag" placeholder="e.g. Tech, Core, Dividend">
+                                </div>
+                                <div class="form-group">
+                                    <label for="stock-price">Buying Price (₹) <span class="required">*</span></label>
+                                    <input type="number" id="stock-price" step="0.01" min="0.01"
+                                        placeholder="Buying price per share" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="stock-qty">Quantity <span class="required">*</span></label>
+                                    <input type="number" id="stock-qty" step="1" min="1" placeholder="Number of shares"
+                                        required>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary" id="btn-submit-stock">
+                                        <i class="fa-solid fa-save"></i> Save Holding
                                     </button>
-                                    <div style="display: flex; align-items: baseline; gap: 15px;">
-                                        <h2 id="detail-symbol" style="margin-bottom: 0;">RELIANCE.NS</h2>
-                                        <h3 id="detail-price" style="margin: 0; color: var(--primary); font-size: 1.6rem; font-weight: 600;">₹0.00</h3>
-                                    </div>
-                                    <span class="company-name-placeholder" id="detail-exchange">NSE (India)</span>
+                                    <button type="reset" class="btn btn-tertiary">
+                                        Reset Form
+                                    </button>
                                 </div>
-                                <div class="chart-timeframes">
-                                    <button class="time-btn" data-period="1mo">1M</button>
-                                    <button class="time-btn" data-period="3mo">3M</button>
-                                    <button class="time-btn" data-period="6mo">6M</button>
-                                    <button class="time-btn active" data-period="1y">1Y</button>
-                                </div>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="stockHistoryChart"></canvas>
-                            </div>
+                            </form>
                         </div>
+                    </div>
 
-                        <!-- Right Panel: Moving Averages Details -->
-                        <div class="card sma-card">
-                            <h3>Simple Moving Averages (SMA)</h3>
-                            <p class="subtitle">SMA indicators help spot trends. Trading above moving averages typically signals positive momentum.</p>
-                            
-                            <div class="sma-metrics-list">
-                                <!-- SMA 20 -->
-                                <div class="sma-item-row" id="sma-20-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot dot-20"></span>
-                                        <div>
-                                            <h4>20-Day SMA</h4>
-                                            <small>Short-term momentum</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col">
-                                        <span class="value" id="sma20-val">₹0.00</span>
-                                        <span class="status-indicator" id="sma20-indicator">Above</span>
-                                    </div>
-                                </div>
-
-                                <!-- SMA 50 -->
-                                <div class="sma-item-row" id="sma-50-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot dot-50" style="background: #2dd4bf; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span>
-                                        <div>
-                                            <h4>50-Day SMA</h4>
-                                            <small>Short/Medium trend</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col">
-                                        <span class="value" id="sma50-val">₹0.00</span>
-                                        <span class="status-indicator" id="sma50-indicator">Above</span>
-                                    </div>
-                                </div>
-
-                                <!-- SMA 100 -->
-                                <div class="sma-item-row" id="sma-100-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot dot-100"></span>
-                                        <div>
-                                            <h4>100-Day SMA</h4>
-                                            <small>Medium-term trend</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col">
-                                        <span class="value" id="sma100-val">₹0.00</span>
-                                        <span class="status-indicator" id="sma100-indicator">Above</span>
-                                    </div>
-                                </div>
-
-                                <!-- SMA 200 -->
-                                <div class="sma-item-row" id="sma-200-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot dot-200"></span>
-                                        <div>
-                                            <h4>200-Day SMA</h4>
-                                            <small>Long-term support/resistance</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col">
-                                        <span class="value" id="sma200-val">₹0.00</span>
-                                        <span class="status-indicator" id="sma200-indicator">Above</span>
-                                    </div>
-                                </div>
-
-                                <!-- RSI -->
-                                <div class="sma-item-row" id="rsi-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot" style="background: var(--warning);"></span>
-                                        <div>
-                                            <h4>14-Day RSI</h4>
-                                            <small>Momentum indicator</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col">
-                                        <span class="value" id="rsi-val">0.00</span>
-                                        <span class="status-indicator" id="rsi-indicator">Neutral</span>
-                                    </div>
-                                </div>
-
-                                <!-- Bollinger Bands Breakout -->
-                                <div class="sma-item-row" id="bb-card">
-                                    <div class="sma-label-col">
-                                        <span class="dot" style="background: var(--secondary);"></span>
-                                        <div>
-                                            <h4>Bollinger Bands</h4>
-                                            <small>Volatility & Breakouts</small>
-                                        </div>
-                                    </div>
-                                    <div class="sma-value-col" style="flex-direction: column; align-items: flex-end; gap: 0.3rem;">
-                                        <span class="value" id="bb-val" style="font-size: 0.9rem;">-</span>
-                                        <span class="status-indicator" id="bb-indicator">Inside Range</span>
-                                    </div>
+                    <!-- VIEW 3: UPLOAD EXCEL FILE -->
+                    <div id="upload-view" class="app-view">
+                        <div class="card upload-card">
+                            <div class="card-header">
+                                <h3>Excel Portfolio Import</h3>
+                                <p class="hint-text">Upload an Excel sheet to bulk merge holdings. Duplicate stock
+                                    entries will merge automatically by recalculating average buying price.</p>
+                            </div>
+                            <div class="upload-area" id="dropzone">
+                                <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                                <h4>Drag & Drop your Excel file here</h4>
+                                <p>or</p>
+                                <label for="excel-file-input" class="btn btn-secondary">
+                                    <i class="fa-solid fa-folder-open"></i> Browse Files
+                                </label>
+                                <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display: none;">
+                                <span class="file-format-info">Supported formats: .xlsx, .xls</span>
+                            </div>
+                            <div class="excel-format-guide">
+                                <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
+                                <p>Your Excel file should contain a sheet with at least these columns (headers can be
+                                    case-insensitive):</p>
+                                <div class="columns-badge-container">
+                                    <span class="badge">Company Name</span>
+                                    <span class="badge">Stock Code</span>
+                                    <span class="badge">Exchange</span>
+                                    <span class="badge">Buying Price</span>
+                                    <span class="badge">Quantity</span>
                                 </div>
                             </div>
-
-                            <div class="sma-technical-summary card-subtext" id="sma-summary-verdict">
-                                <!-- Populated by JS -->
+                            <!-- Upload results modal / box -->
+                            <div class="upload-result-box hidden" id="upload-result">
+                                <!-- Populated dynamically -->
                             </div>
                         </div>
                     </div>
 
-                    <!-- Stock Details Metrics Card -->
-                    <div class="card stock-details-card" id="stock-details-card" style="margin-top: 1.5rem;">
-                        <div class="card-header" style="margin-bottom: 1.25rem;">
-                            <h3><i class="fa-solid fa-chart-column" style="color: var(--primary-hover); margin-right: 0.5rem;"></i>Stock Details</h3>
-                            <p class="subtitle" style="margin-top: 0.3rem;">Key trading metrics and valuation indicators</p>
-                        </div>
-                        <div class="stock-metrics-grid" id="stock-metrics-grid">
-                            <!-- 52-Week High -->
-                            <div class="metric-tile" id="metric-52h">
-                                <div class="metric-icon"><i class="fa-solid fa-arrow-up"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">52-Week High</span>
-                                    <span class="metric-value" id="metric-52wk-high">—</span>
-                                </div>
+                    <!-- VIEW: VALIDATE PORTFOLIO -->
+                    <div id="validate-view" class="app-view">
+                        <div class="card upload-card" id="validate-upload-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-clipboard-check"
+                                        style="color:var(--primary-hover);margin-right:0.5rem;"></i>Portfolio Validator
+                                </h3>
+                                <p class="hint-text">Upload your Excel stock list to compare it against your live
+                                    database records. No data will be modified.</p>
                             </div>
-                            <!-- 52-Week Low -->
-                            <div class="metric-tile" id="metric-52l">
-                                <div class="metric-icon" style="background: var(--danger-light); color: var(--danger);"><i class="fa-solid fa-arrow-down"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">52-Week Low</span>
-                                    <span class="metric-value" id="metric-52wk-low">—</span>
-                                </div>
+                            <div class="upload-area" id="validate-dropzone">
+                                <i class="fa-solid fa-magnifying-glass-chart cloud-icon"></i>
+                                <h4>Drag &amp; Drop one or more Excel files</h4>
+                                <p>or</p>
+                                <label for="validate-file-input" class="btn btn-secondary">
+                                    <i class="fa-solid fa-folder-open"></i> Browse Files
+                                </label>
+                                <input type="file" id="validate-file-input" accept=".xlsx, .xls" multiple
+                                    style="display: none;">
+                                <span class="file-format-info">Supported formats: .xlsx, .xls &nbsp;·&nbsp; Multiple
+                                    files allowed</span>
+                                <!-- Selected file chips -->
+                                <div id="validate-file-list" class="validate-file-chips hidden"></div>
                             </div>
-                            <!-- Market Cap -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: var(--warning-light); color: var(--warning);"><i class="fa-solid fa-building-columns"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Market Cap</span>
-                                    <span class="metric-value" id="metric-market-cap">—</span>
+                            <div class="excel-format-guide">
+                                <h5><i class="fa-solid fa-circle-exclamation"></i> Required Columns Format</h5>
+                                <p>Your file must contain at least:</p>
+                                <div class="columns-badge-container">
+                                    <span class="badge">Stock Code</span>
+                                    <span class="badge">Buying Price</span>
+                                    <span class="badge">Quantity</span>
                                 </div>
-                            </div>
-                            <!-- P/E Ratio -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(139,92,246,0.15); color: #a78bfa;"><i class="fa-solid fa-percent"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">P/E Ratio (TTM)</span>
-                                    <span class="metric-value" id="metric-pe">—</span>
-                                </div>
-                            </div>
-                            <!-- EPS -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(20,184,166,0.15); color: #2dd4bf;"><i class="fa-solid fa-coins"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">EPS (TTM)</span>
-                                    <span class="metric-value" id="metric-eps">—</span>
-                                </div>
-                            </div>
-                            <!-- Dividend Yield -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(16,185,129,0.15); color: var(--success);"><i class="fa-solid fa-hand-holding-dollar"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Dividend Yield</span>
-                                    <span class="metric-value" id="metric-dividend">—</span>
-                                </div>
-                            </div>
-                            <!-- Beta -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(245,158,11,0.15); color: var(--warning);"><i class="fa-solid fa-wave-square"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Beta</span>
-                                    <span class="metric-value" id="metric-beta">—</span>
-                                </div>
-                            </div>
-                            <!-- Avg Volume -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(99,102,241,0.15); color: var(--primary-hover);"><i class="fa-solid fa-chart-bar"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Avg. Volume</span>
-                                    <span class="metric-value" id="metric-volume">—</span>
-                                </div>
-                            </div>
-                            <!-- Price to Book -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(236,72,153,0.15); color: #f472b6;"><i class="fa-solid fa-book"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Price / Book</span>
-                                    <span class="metric-value" id="metric-pb">—</span>
-                                </div>
-                            </div>
-                            <!-- Profit Margin -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(16,185,129,0.1); color: var(--success);"><i class="fa-solid fa-chart-pie"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Profit Margin</span>
-                                    <span class="metric-value" id="metric-profit-margin">—</span>
-                                </div>
-                            </div>
-                            <!-- Return on Equity -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(99,102,241,0.1); color: var(--primary-hover);"><i class="fa-solid fa-arrow-trend-up"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Return on Equity</span>
-                                    <span class="metric-value" id="metric-roe">—</span>
-                                </div>
-                            </div>
-                            <!-- Debt to Equity -->
-                            <div class="metric-tile">
-                                <div class="metric-icon" style="background: rgba(239,68,68,0.1); color: var(--danger);"><i class="fa-solid fa-scale-unbalanced"></i></div>
-                                <div class="metric-body">
-                                    <span class="metric-label">Debt / Equity</span>
-                                    <span class="metric-value" id="metric-de">—</span>
-                                </div>
+                                <p style="margin-top:0.6rem;font-size:0.82rem;color:var(--text-muted);">Quantity must
+                                    match exactly. Buying Price is shown for reference only.</p>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- About Company Card -->
-                    <div class="card about-company-card" id="about-company-card" style="margin-top: 1.5rem;">
-                        <div class="about-company-header">
-                            <div class="about-company-identity">
-                                <div class="about-company-logo-placeholder" id="about-logo-placeholder">
-                                    <i class="fa-solid fa-building"></i>
+                        <!-- Validation Results -->
+                        <div id="validate-results" class="hidden" style="margin-top:1.5rem;">
+
+                            <!-- Summary Strip -->
+                            <div class="validate-summary-strip" id="validate-summary-strip">
+                                <div class="vs-card vs-match">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <div>
+                                        <span class="vs-count" id="vs-match-count">0</span>
+                                        <span class="vs-label">Matched</span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 id="about-company-name" style="font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; margin: 0;">Company</h2>
-                                    <div class="about-company-meta" id="about-company-meta">
-                                        <!-- sector / industry / location pills filled by JS -->
+                                <div class="vs-card vs-mismatch">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <div>
+                                        <span class="vs-count" id="vs-mismatch-count">0</span>
+                                        <span class="vs-label">Mismatched</span>
+                                    </div>
+                                </div>
+                                <div class="vs-card vs-notdb">
+                                    <i class="fa-solid fa-circle-question"></i>
+                                    <div>
+                                        <span class="vs-count" id="vs-notdb-count">0</span>
+                                        <span class="vs-label">Not in DB</span>
+                                    </div>
+                                </div>
+                                <div class="vs-card vs-notfile">
+                                    <i class="fa-solid fa-file-circle-xmark"></i>
+                                    <div>
+                                        <span class="vs-count" id="vs-notfile-count">0</span>
+                                        <span class="vs-label">Not in File</span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="about-company-right" id="about-company-right">
-                                <!-- employees / website filled by JS -->
+
+                            <!-- Filter Tabs -->
+                            <div class="validate-filter-tabs" id="validate-filter-tabs">
+                                <button class="vf-tab active" data-filter="all">All</button>
+                                <button class="vf-tab" data-filter="mismatch">Mismatches Only</button>
+                                <button class="vf-tab" data-filter="not_in_db">Not in DB</button>
+                                <button class="vf-tab" data-filter="not_in_file">Not in File</button>
+                            </div>
+
+                            <!-- Main Results Table -->
+                            <div class="card" style="padding:0;overflow:visible;">
+                                <div class="table-responsive">
+                                    <table class="stock-table validate-table" id="validate-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="vs-sortable" data-vsort="seq"># <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable" data-vsort="stock_code">Stock Code <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable" data-vsort="company_name">Company <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable text-center" data-vsort="status">Status <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable text-right" data-vsort="price_file">Buy Price
+                                                    (File) <i class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable text-right" data-vsort="price_db">Buy Price (DB)
+                                                    <i class="fa-solid fa-sort"></i>
+                                                </th>
+                                                <th class="vs-sortable text-right" data-vsort="qty_file">Qty (File) <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="vs-sortable text-right" data-vsort="qty_db">Qty (DB) <i
+                                                        class="fa-solid fa-sort"></i></th>
+                                                <th class="text-center">Exchange</th>
+                                                <th class="text-center">Source File</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="validate-table-body">
+                                            <!-- Populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div><!-- /validate-results -->
+                    </div><!-- /validate-view -->
+
+                    <!-- VIEW 4: STOCK DETAILS & SMA ANALYSIS -->
+                    <div id="details-view" class="app-view">
+                        <div class="details-grid">
+                            <!-- Left Panel: Chart & Ticker Overview -->
+                            <div class="card detail-chart-card">
+                                <div class="detail-header">
+                                    <div class="ticker-identity">
+                                        <button class="btn btn-link btn-back" id="btn-back-dashboard">
+                                            <i class="fa-solid fa-arrow-left"></i> Back to Portfolio
+                                        </button>
+                                        <div style="display: flex; align-items: baseline; gap: 15px;">
+                                            <h2 id="detail-symbol" style="margin-bottom: 0;">RELIANCE.NS</h2>
+                                            <h3 id="detail-price"
+                                                style="margin: 0; color: var(--primary); font-size: 1.6rem; font-weight: 600;">
+                                                ₹0.00</h3>
+                                        </div>
+                                        <span class="company-name-placeholder" id="detail-exchange">NSE (India)</span>
+                                    </div>
+                                    <div class="chart-timeframes">
+                                        <button class="time-btn" data-period="1mo">1M</button>
+                                        <button class="time-btn" data-period="3mo">3M</button>
+                                        <button class="time-btn" data-period="6mo">6M</button>
+                                        <button class="time-btn active" data-period="1y">1Y</button>
+                                    </div>
+                                </div>
+                                <div class="chart-wrapper">
+                                    <canvas id="stockHistoryChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Right Panel: Moving Averages Details -->
+                            <div class="card sma-card">
+                                <h3>Simple Moving Averages (SMA)</h3>
+                                <p class="subtitle">SMA indicators help spot trends. Trading above moving averages
+                                    typically signals positive momentum.</p>
+
+                                <div class="sma-metrics-list">
+                                    <!-- SMA 20 -->
+                                    <div class="sma-item-row" id="sma-20-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot dot-20"></span>
+                                            <div>
+                                                <h4>20-Day SMA</h4>
+                                                <small>Short-term momentum</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col">
+                                            <span class="value" id="sma20-val">₹0.00</span>
+                                            <span class="status-indicator" id="sma20-indicator">Above</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- SMA 50 -->
+                                    <div class="sma-item-row" id="sma-50-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot dot-50"
+                                                style="background: #2dd4bf; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span>
+                                            <div>
+                                                <h4>50-Day SMA</h4>
+                                                <small>Short/Medium trend</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col">
+                                            <span class="value" id="sma50-val">₹0.00</span>
+                                            <span class="status-indicator" id="sma50-indicator">Above</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- SMA 100 -->
+                                    <div class="sma-item-row" id="sma-100-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot dot-100"></span>
+                                            <div>
+                                                <h4>100-Day SMA</h4>
+                                                <small>Medium-term trend</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col">
+                                            <span class="value" id="sma100-val">₹0.00</span>
+                                            <span class="status-indicator" id="sma100-indicator">Above</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- SMA 200 -->
+                                    <div class="sma-item-row" id="sma-200-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot dot-200"></span>
+                                            <div>
+                                                <h4>200-Day SMA</h4>
+                                                <small>Long-term support/resistance</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col">
+                                            <span class="value" id="sma200-val">₹0.00</span>
+                                            <span class="status-indicator" id="sma200-indicator">Above</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- RSI -->
+                                    <div class="sma-item-row" id="rsi-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot" style="background: var(--warning);"></span>
+                                            <div>
+                                                <h4>14-Day RSI</h4>
+                                                <small>Momentum indicator</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col">
+                                            <span class="value" id="rsi-val">0.00</span>
+                                            <span class="status-indicator" id="rsi-indicator">Neutral</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Bollinger Bands Breakout -->
+                                    <div class="sma-item-row" id="bb-card">
+                                        <div class="sma-label-col">
+                                            <span class="dot" style="background: var(--secondary);"></span>
+                                            <div>
+                                                <h4>Bollinger Bands</h4>
+                                                <small>Volatility & Breakouts</small>
+                                            </div>
+                                        </div>
+                                        <div class="sma-value-col"
+                                            style="flex-direction: column; align-items: flex-end; gap: 0.3rem;">
+                                            <span class="value" id="bb-val" style="font-size: 0.9rem;">-</span>
+                                            <span class="status-indicator" id="bb-indicator">Inside Range</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="sma-technical-summary card-subtext" id="sma-summary-verdict">
+                                    <!-- Populated by JS -->
+                                </div>
                             </div>
                         </div>
 
-                        <div class="about-company-divider"></div>
-
-                        <div class="about-bio-wrapper">
-                            <h4 style="font-family: var(--font-heading); font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-                                <i class="fa-solid fa-circle-info" style="margin-right: 0.4rem; color: var(--primary-hover);"></i>Business Overview
-                            </h4>
-                            <div class="about-bio-text" id="about-bio-text">
-                                <p id="about-bio-short" class="bio-paragraph">Loading company information...</p>
-                                <p id="about-bio-full" class="bio-paragraph bio-full hidden"></p>
+                        <!-- Stock Details Metrics Card -->
+                        <div class="card stock-details-card" id="stock-details-card" style="margin-top: 1.5rem;">
+                            <div class="card-header" style="margin-bottom: 1.25rem;">
+                                <h3><i class="fa-solid fa-chart-column"
+                                        style="color: var(--primary-hover); margin-right: 0.5rem;"></i>Stock Details
+                                </h3>
+                                <p class="subtitle" style="margin-top: 0.3rem;">Key trading metrics and valuation
+                                    indicators</p>
                             </div>
-                            <button id="about-read-more-btn" class="btn-read-more hidden">
-                                Read more <i class="fa-solid fa-chevron-down"></i>
-                            </button>
+                            <div class="stock-metrics-grid" id="stock-metrics-grid">
+                                <!-- 52-Week High -->
+                                <div class="metric-tile" id="metric-52h">
+                                    <div class="metric-icon"><i class="fa-solid fa-arrow-up"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">52-Week High</span>
+                                        <span class="metric-value" id="metric-52wk-high">—</span>
+                                    </div>
+                                </div>
+                                <!-- 52-Week Low -->
+                                <div class="metric-tile" id="metric-52l">
+                                    <div class="metric-icon"
+                                        style="background: var(--danger-light); color: var(--danger);"><i
+                                            class="fa-solid fa-arrow-down"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">52-Week Low</span>
+                                        <span class="metric-value" id="metric-52wk-low">—</span>
+                                    </div>
+                                </div>
+                                <!-- Market Cap -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: var(--warning-light); color: var(--warning);"><i
+                                            class="fa-solid fa-building-columns"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Market Cap</span>
+                                        <span class="metric-value" id="metric-market-cap">—</span>
+                                    </div>
+                                </div>
+                                <!-- P/E Ratio -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon" style="background: rgba(139,92,246,0.15); color: #a78bfa;">
+                                        <i class="fa-solid fa-percent"></i>
+                                    </div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">P/E Ratio (TTM)</span>
+                                        <span class="metric-value" id="metric-pe">—</span>
+                                    </div>
+                                </div>
+                                <!-- EPS -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon" style="background: rgba(20,184,166,0.15); color: #2dd4bf;">
+                                        <i class="fa-solid fa-coins"></i>
+                                    </div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">EPS (TTM)</span>
+                                        <span class="metric-value" id="metric-eps">—</span>
+                                    </div>
+                                </div>
+                                <!-- Dividend Yield -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(16,185,129,0.15); color: var(--success);"><i
+                                            class="fa-solid fa-hand-holding-dollar"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Dividend Yield</span>
+                                        <span class="metric-value" id="metric-dividend">—</span>
+                                    </div>
+                                </div>
+                                <!-- Beta -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(245,158,11,0.15); color: var(--warning);"><i
+                                            class="fa-solid fa-wave-square"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Beta</span>
+                                        <span class="metric-value" id="metric-beta">—</span>
+                                    </div>
+                                </div>
+                                <!-- Avg Volume -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(99,102,241,0.15); color: var(--primary-hover);"><i
+                                            class="fa-solid fa-chart-bar"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Avg. Volume</span>
+                                        <span class="metric-value" id="metric-volume">—</span>
+                                    </div>
+                                </div>
+                                <!-- Price to Book -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon" style="background: rgba(236,72,153,0.15); color: #f472b6;">
+                                        <i class="fa-solid fa-book"></i>
+                                    </div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Price / Book</span>
+                                        <span class="metric-value" id="metric-pb">—</span>
+                                    </div>
+                                </div>
+                                <!-- Profit Margin -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(16,185,129,0.1); color: var(--success);"><i
+                                            class="fa-solid fa-chart-pie"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Profit Margin</span>
+                                        <span class="metric-value" id="metric-profit-margin">—</span>
+                                    </div>
+                                </div>
+                                <!-- Return on Equity -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(99,102,241,0.1); color: var(--primary-hover);"><i
+                                            class="fa-solid fa-arrow-trend-up"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Return on Equity</span>
+                                        <span class="metric-value" id="metric-roe">—</span>
+                                    </div>
+                                </div>
+                                <!-- Debt to Equity -->
+                                <div class="metric-tile">
+                                    <div class="metric-icon"
+                                        style="background: rgba(239,68,68,0.1); color: var(--danger);"><i
+                                            class="fa-solid fa-scale-unbalanced"></i></div>
+                                    <div class="metric-body">
+                                        <span class="metric-label">Debt / Equity</span>
+                                        <span class="metric-value" id="metric-de">—</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- About Company Card -->
+                        <div class="card about-company-card" id="about-company-card" style="margin-top: 1.5rem;">
+                            <div class="about-company-header">
+                                <div class="about-company-identity">
+                                    <div class="about-company-logo-placeholder" id="about-logo-placeholder">
+                                        <i class="fa-solid fa-building"></i>
+                                    </div>
+                                    <div>
+                                        <h2 id="about-company-name"
+                                            style="font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; margin: 0;">
+                                            Company</h2>
+                                        <div class="about-company-meta" id="about-company-meta">
+                                            <!-- sector / industry / location pills filled by JS -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="about-company-right" id="about-company-right">
+                                    <!-- employees / website filled by JS -->
+                                </div>
+                            </div>
+
+                            <div class="about-company-divider"></div>
+
+                            <div class="about-bio-wrapper">
+                                <h4
+                                    style="font-family: var(--font-heading); font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fa-solid fa-circle-info"
+                                        style="margin-right: 0.4rem; color: var(--primary-hover);"></i>Business Overview
+                                </h4>
+                                <div class="about-bio-text" id="about-bio-text">
+                                    <p id="about-bio-short" class="bio-paragraph">Loading company information...</p>
+                                    <p id="about-bio-full" class="bio-paragraph bio-full hidden"></p>
+                                </div>
+                                <button id="about-read-more-btn" class="btn-read-more hidden">
+                                    Read more <i class="fa-solid fa-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- News Section -->
+
+                        <div class="card news-card" style="margin-top: 1.5rem;">
+                            <div class="card-header">
+                                <h3>Latest Technical & Stock News</h3>
+                            </div>
+                            <div class="news-list" id="stock-news-list">
+                                <p class="text-muted">Loading latest news...</p>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- News Section -->
-
-                    <div class="card news-card" style="margin-top: 1.5rem;">
-                        <div class="card-header">
-                            <h3>Latest Technical & Stock News</h3>
-                        </div>
-                        <div class="news-list" id="stock-news-list">
-                            <p class="text-muted">Loading latest news...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- VIEW 5: TRENDS -->
-                <div id="trends-view" class="app-view">
-                    <div class="card" style="padding: 1.5rem; height: 100%;">
-                        <div class="card-header" style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-                            <h3>Historical Portfolio & Index Performance</h3>
-                            <p class="subtitle" style="margin-top: 0.5rem;">Track your Total Invested, Current Value, and Nifty SmallCap 100 over time. Click items in the legend to toggle them.</p>
-                        </div>
-                        <div class="chart-container" style="position: relative; height: 60vh; width: 100%;">
-                            <canvas id="trendsChart"></canvas>
+                    <!-- VIEW 5: TRENDS -->
+                    <div id="trends-view" class="app-view">
+                        <div class="card" style="padding: 1.5rem; height: 100%;">
+                            <div class="card-header"
+                                style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                                <h3>Historical Portfolio & Index Performance</h3>
+                                <p class="subtitle" style="margin-top: 0.5rem;">Track your Total Invested, Current
+                                    Value, and Nifty SmallCap 100 over time. Click items in the legend to toggle them.
+                                </p>
+                            </div>
+                            <div class="chart-container" style="position: relative; height: 60vh; width: 100%;">
+                                <canvas id="trendsChart"></canvas>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-            </section>
-        </main>
-    </div>
-
-    <!-- Edit Stock Modal -->
-    <div id="edit-stock-modal" class="modal-overlay hidden">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3>Edit Stock Details</h3>
-                <button type="button" class="btn-close-modal" id="btn-close-edit-modal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="edit-stock-form" class="form-grid">
-                <!-- Hidden original symbol to know which one we are updating -->
-                <input type="hidden" id="edit-original-symbol">
-                
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label for="edit-company-name">Company Name <span class="required">*</span></label>
-                    <input type="text" id="edit-company-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-stock-code">Stock Code <span class="required">*</span></label>
-                    <input type="text" id="edit-stock-code" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-exchange">Exchange <span class="required">*</span></label>
-                    <select id="edit-exchange" required>
-                        <option value="NSE">NSE (.NS)</option>
-                        <option value="BSE">BSE (.BO)</option>
-                    </select>
-                </div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label for="edit-stock-tag">Tag <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
-                    <input type="text" id="edit-stock-tag" placeholder="e.g. Tech, Core, Dividend">
-                </div>
-                <div class="form-actions" style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
-                    <button type="button" class="btn btn-tertiary" id="btn-cancel-edit-modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btn-save-edit-modal">Save Changes</button>
-                </div>
-            </form>
+                </section>
+            </main>
         </div>
-    </div>
 
-    <!-- Notification Toast System -->
-    <div id="toast-container" class="toast-container"></div>
+        <!-- Edit Stock Modal -->
+        <div id="edit-stock-modal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Edit Stock Details</h3>
+                    <button type="button" class="btn-close-modal" id="btn-close-edit-modal"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="edit-stock-form" class="form-grid">
+                    <!-- Hidden original symbol to know which one we are updating -->
+                    <input type="hidden" id="edit-original-symbol">
 
-    <!-- App JavaScript -->
-    <script src="auth.js?v=19"></script>
-    <script src="app.js?v=19"></script>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="edit-company-name">Company Name <span class="required">*</span></label>
+                        <input type="text" id="edit-company-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-stock-code">Stock Code <span class="required">*</span></label>
+                        <input type="text" id="edit-stock-code" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-exchange">Exchange <span class="required">*</span></label>
+                        <select id="edit-exchange" required>
+                            <option value="NSE">NSE (.NS)</option>
+                            <option value="BSE">BSE (.BO)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="edit-stock-tag">Tag <span class="optional"
+                                style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                        <input type="text" id="edit-stock-tag" placeholder="e.g. Tech, Core, Dividend">
+                    </div>
+                    <div class="form-actions"
+                        style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
+                        <button type="button" class="btn btn-tertiary" id="btn-cancel-edit-modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btn-save-edit-modal">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Notification Toast System -->
+        <div id="toast-container" class="toast-container"></div>
+
+        <!-- App JavaScript -->
+        <script src="auth.js?v=19"></script>
+        <script src="app.js?v=19"></script>
 </body>
+
 </html>
