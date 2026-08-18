@@ -492,6 +492,9 @@ function renderStocksTable(stocks) {
 
     tableBody.innerHTML = "";
 
+    // Compute total portfolio investment for weight % calculation
+    const totalPortfolioInvested = stocks.reduce((sum, s) => sum + (s.buying_price * s.quantity), 0);
+
     stocks.forEach((stock, index) => {
         const row = document.createElement("tr");
         row.setAttribute("data-symbol", stock.symbol);
@@ -536,7 +539,9 @@ function renderStocksTable(stocks) {
             currentPriceText = `<span class="loss-val" title="${stock.error}"><i class="fa-solid fa-circle-exclamation"></i> Failed</span>`;
         }
 
-        const investValText = `₹${(buyPrice * qty).toFixed(2)}`;
+        const investAmt = buyPrice * qty;
+        const investValText = `₹${investAmt.toFixed(2)}`;
+        const weightPct = totalPortfolioInvested > 0 ? (investAmt / totalPortfolioInvested * 100).toFixed(1) : '0.0';
 
         // SMA status badges
         let smaBadges = "";
@@ -602,8 +607,14 @@ function renderStocksTable(stocks) {
                 <i class="fa-solid fa-pen-to-square edit-pencil"></i>
             </td>
             <td class="text-right">${currentPriceText}</td>
-            <td class="text-right">₹${(buyPrice * qty).toFixed(2)}</td>
-            <td class="text-right">${currentValText}</td>
+            <td class="text-right">
+                <div>${investValText}</div>
+                <div style="font-size: 0.78rem; margin-top: 0.15rem; color: var(--text-muted);">(${weightPct}% of portfolio)</div>
+            </td>
+            <td class="text-right ${gainLossClass}">
+                <div>${currentValText}</div>
+                <div style="font-size: 0.78rem; margin-top: 0.15rem;">${gainLossPctText}</div>
+            </td>
             <td class="text-right ${todayReturnClass}">
                 <div>${todayReturnText}</div>
                 <div style="font-size: 0.78rem; margin-top: 0.15rem;">${todayReturnPctText}</div>
@@ -904,6 +915,8 @@ async function saveDailySnapshot() {
 }
 
 let _trendsChartInstance = null;
+// Store raw data for tooltip real-value display
+let _trendsRawData = { invested: [], current: [], smallcap: [] };
 
 async function fetchAndRenderTrends() {
     try {
@@ -917,14 +930,26 @@ async function fetchAndRenderTrends() {
         }
 
         const labels = data.map(d => {
-            // Format date nicely
             const dateObj = new Date(d.date);
             return dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
         });
 
-        const investedData = data.map(d => d.total_invested);
-        const currentData = data.map(d => d.current_value);
-        const smallcapData = data.map(d => d.nifty_smallcap_100);
+        const rawInvested = data.map(d => d.total_invested);
+        const rawCurrent  = data.map(d => d.current_value);
+        const rawSmallcap = data.map(d => d.nifty_smallcap_100);
+
+        // Store raw for tooltip
+        _trendsRawData = { invested: rawInvested, current: rawCurrent, smallcap: rawSmallcap };
+
+        // ── Normalize: rebase to 100 at first non-zero point ────────────────
+        function normalize(arr) {
+            const base = arr.find(v => v && v !== 0) || 1;
+            return arr.map(v => v != null ? parseFloat(((v / base) * 100).toFixed(4)) : null);
+        }
+
+        const normInvested = normalize(rawInvested);
+        const normCurrent  = normalize(rawCurrent);
+        const normSmallcap = normalize(rawSmallcap);
 
         const ctx = document.getElementById('trendsChart').getContext('2d');
 
@@ -939,30 +964,36 @@ async function fetchAndRenderTrends() {
                 datasets: [
                     {
                         label: 'Total Invested (₹)',
-                        data: investedData,
+                        data: normInvested,
                         borderColor: '#94a3b8',
-                        backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                        backgroundColor: 'rgba(148, 163, 184, 0.08)',
                         borderWidth: 2,
                         tension: 0.3,
-                        yAxisID: 'y'
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        fill: false,
                     },
                     {
                         label: 'Current Value (₹)',
-                        data: currentData,
+                        data: normCurrent,
                         borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                        borderWidth: 2,
+                        backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                        borderWidth: 2.5,
                         tension: 0.3,
-                        yAxisID: 'y'
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        fill: false,
                     },
                     {
                         label: 'Nifty SmallCap 100',
-                        data: smallcapData,
+                        data: normSmallcap,
                         borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
                         borderWidth: 2,
                         tension: 0.3,
-                        yAxisID: 'y1'
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        fill: false,
                     }
                 ]
             },
@@ -978,45 +1009,67 @@ async function fetchAndRenderTrends() {
                         position: 'top',
                         labels: {
                             color: '#e2e8f0',
-                            font: { family: "'Inter', sans-serif", size: 12 }
+                            font: { family: "'Inter', sans-serif", size: 12 },
+                            usePointStyle: true,
+                            padding: 18
                         }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        backgroundColor: 'rgba(10, 17, 35, 0.95)',
                         titleColor: '#f8fafc',
                         bodyColor: '#cbd5e1',
                         borderColor: '#334155',
                         borderWidth: 1,
-                        padding: 10
+                        padding: 12,
+                        callbacks: {
+                            title(items) {
+                                return items[0]?.label ?? '';
+                            },
+                            label(ctx) {
+                                const idx     = ctx.dataIndex;
+                                const norm    = ctx.parsed.y;
+                                const pct     = (norm - 100).toFixed(2);
+                                const sign    = pct >= 0 ? '+' : '';
+                                let realVal   = '';
+                                if (ctx.datasetIndex === 0) {
+                                    const v = _trendsRawData.invested[idx];
+                                    realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
+                                } else if (ctx.datasetIndex === 1) {
+                                    const v = _trendsRawData.current[idx];
+                                    realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
+                                } else if (ctx.datasetIndex === 2) {
+                                    const v = _trendsRawData.smallcap[idx];
+                                    realVal = v != null ? ` | Real: ${v.toLocaleString('en-IN', {maximumFractionDigits: 2})} pts` : '';
+                                }
+                                return ` ${ctx.dataset.label}: ${norm.toFixed(2)} (${sign}${pct}%)${realVal}`;
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: {
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
+                        ticks: { color: '#94a3b8', font: { size: 11 } }
                     },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: { size: 11 },
+                            callback(val) {
+                                const pct = (val - 100).toFixed(1);
+                                const sign = val >= 100 ? '+' : '';
+                                return `${sign}${pct}%`;
+                            }
+                        },
                         title: {
                             display: true,
-                            text: 'Portfolio Value (₹)',
-                            color: '#94a3b8'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#10b981' },
-                        title: {
-                            display: true,
-                            text: 'Index Value',
-                            color: '#10b981'
+                            text: '% Change from Start (Normalized to 100)',
+                            color: '#94a3b8',
+                            font: { size: 11 }
                         }
                     }
                 }
