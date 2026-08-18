@@ -2372,4 +2372,135 @@ th.sortable.active-sort i {
     color: var(--primary-hover);
     font-size: 0.75rem;
 }
+
+/* ── Trends Date Filter Bar ─────────────────────────────────────────────── */
+.trends-filter-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+}
+
+/* Preset quick-select pills */
+.trends-presets {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.trends-preset-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    letter-spacing: 0.02em;
+}
+
+.trends-preset-btn:hover {
+    color: var(--text-main);
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.trends-preset-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+/* Divider between presets and custom range */
+.trends-filter-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-color);
+    flex-shrink: 0;
+}
+
+/* Custom date range group */
+.trends-date-range {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.trends-date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.trends-date-field label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.trends-date-field input[type="date"] {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    color: var(--text-main);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.65rem;
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+    color-scheme: dark;
+}
+
+.trends-date-field input[type="date"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.trends-date-arrow {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 1rem;
+    flex-shrink: 0;
+}
+
+.trends-apply-btn {
+    font-size: 0.82rem;
+    padding: 0.4rem 0.9rem;
+    margin-top: 1rem;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Active range badge */
+.trends-active-range {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    white-space: nowrap;
+}
+
+.trends-active-range span {
+    color: var(--primary-hover);
+    font-weight: 600;
+    font-style: normal;
+}
 

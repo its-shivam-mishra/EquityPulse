@@ -863,22 +863,56 @@
                                 <p class="text-muted">Loading latest news...</p>
                             </div>
                         </div>
-                    </div>
+
+                    </div><!-- /details-view -->
 
                     <!-- VIEW 5: TRENDS -->
                     <div id="trends-view" class="app-view">
                         <div class="card" style="padding: 1.5rem; height: 100%;">
                             <div class="card-header"
                                 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-                                <h3>Historical Portfolio & Index Performance</h3>
+                                <h3>Historical Portfolio &amp; Index Performance</h3>
                                 <p class="subtitle" style="margin-top: 0.5rem;">All series are <strong>normalized to 100</strong> at their first data point — so you can compare their relative growth on the same scale. Y-axis shows <strong>% change from start</strong>. Hover over the chart to see the exact <strong>real values</strong>. Click legend items to toggle series.
                                 </p>
                             </div>
-                            <div class="chart-container" style="position: relative; height: 60vh; width: 100%;">
+
+                            <!-- Date Filter Bar -->
+                            <div class="trends-filter-bar" id="trends-filter-bar">
+                                <!-- Quick Presets -->
+                                <div class="trends-presets">
+                                    <button class="trends-preset-btn" data-preset="1W">1W</button>
+                                    <button class="trends-preset-btn" data-preset="1M">1M</button>
+                                    <button class="trends-preset-btn" data-preset="3M">3M</button>
+                                    <button class="trends-preset-btn" data-preset="6M">6M</button>
+                                    <button class="trends-preset-btn" data-preset="1Y">1Y</button>
+                                    <button class="trends-preset-btn active" data-preset="ALL">All</button>
+                                </div>
+                                <!-- Divider -->
+                                <div class="trends-filter-divider"></div>
+                                <!-- Custom Date Range -->
+                                <div class="trends-date-range">
+                                    <div class="trends-date-field">
+                                        <label for="trends-date-from"><i class="fa-solid fa-calendar-days"></i> From</label>
+                                        <input type="date" id="trends-date-from">
+                                    </div>
+                                    <span class="trends-date-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+                                    <div class="trends-date-field">
+                                        <label for="trends-date-to"><i class="fa-solid fa-calendar-days"></i> To</label>
+                                        <input type="date" id="trends-date-to">
+                                    </div>
+                                    <button class="btn btn-primary trends-apply-btn" id="trends-apply-btn">
+                                        <i class="fa-solid fa-filter"></i> Apply
+                                    </button>
+                                </div>
+                                <!-- Active range label -->
+                                <div class="trends-active-range" id="trends-active-range"></div>
+                            </div>
+
+                            <div class="chart-container" style="position: relative; height: 56vh; width: 100%;">
                                 <canvas id="trendsChart"></canvas>
                             </div>
                         </div>
-                    </div>
+                    </div><!-- /trends-view -->
 
                 </section>
             </main>
@@ -930,7 +964,7 @@
 
         <!-- App JavaScript -->
         <script src="auth.js?v=19"></script>
-        <script src="app.js?v=21"></script>
+        <script src="app.js?v=22"></script>
 </body>
 
 </html>

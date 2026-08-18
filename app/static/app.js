@@ -917,169 +917,304 @@ async function saveDailySnapshot() {
 let _trendsChartInstance = null;
 // Store raw data for tooltip real-value display
 let _trendsRawData = { invested: [], current: [], smallcap: [] };
+// Full unfiltered API data cache
+let _trendsAllData = [];
 
 async function fetchAndRenderTrends() {
     try {
         const response = await fetch("/api/stats/history");
         if (!response.ok) throw new Error("Failed to fetch historical stats");
+        _trendsAllData = await response.json();
 
-        const data = await response.json();
+        if (_trendsAllData.length === 0) return;
 
-        if (data.length === 0) {
-            return; // No data yet
+        // Seed date inputs with full range bounds
+        const firstDate = _trendsAllData[0].date.slice(0, 10);
+        const lastDate  = _trendsAllData[_trendsAllData.length - 1].date.slice(0, 10);
+        const fromInput = document.getElementById('trends-date-from');
+        const toInput   = document.getElementById('trends-date-to');
+        if (fromInput && !fromInput.value) {
+            fromInput.min = firstDate;
+            fromInput.max = lastDate;
+            fromInput.value = firstDate;
+        }
+        if (toInput && !toInput.value) {
+            toInput.min = firstDate;
+            toInput.max = lastDate;
+            toInput.value = lastDate;
         }
 
-        const labels = data.map(d => {
-            const dateObj = new Date(d.date);
-            return dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-        });
+        // Wire up filter controls once
+        initTrendsFilter();
 
-        const rawInvested = data.map(d => d.total_invested);
-        const rawCurrent  = data.map(d => d.current_value);
-        const rawSmallcap = data.map(d => d.nifty_smallcap_100);
-
-        // Store raw for tooltip
-        _trendsRawData = { invested: rawInvested, current: rawCurrent, smallcap: rawSmallcap };
-
-        // ── Normalize: rebase to 100 at first non-zero point ────────────────
-        function normalize(arr) {
-            const base = arr.find(v => v && v !== 0) || 1;
-            return arr.map(v => v != null ? parseFloat(((v / base) * 100).toFixed(4)) : null);
-        }
-
-        const normInvested = normalize(rawInvested);
-        const normCurrent  = normalize(rawCurrent);
-        const normSmallcap = normalize(rawSmallcap);
-
-        const ctx = document.getElementById('trendsChart').getContext('2d');
-
-        if (_trendsChartInstance) {
-            _trendsChartInstance.destroy();
-        }
-
-        _trendsChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Total Invested (₹)',
-                        data: normInvested,
-                        borderColor: '#94a3b8',
-                        backgroundColor: 'rgba(148, 163, 184, 0.08)',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 6,
-                        fill: false,
-                    },
-                    {
-                        label: 'Current Value (₹)',
-                        data: normCurrent,
-                        borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.08)',
-                        borderWidth: 2.5,
-                        tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 6,
-                        fill: false,
-                    },
-                    {
-                        label: 'Nifty SmallCap 100',
-                        data: normSmallcap,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 6,
-                        fill: false,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            color: '#e2e8f0',
-                            font: { family: "'Inter', sans-serif", size: 12 },
-                            usePointStyle: true,
-                            padding: 18
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(10, 17, 35, 0.95)',
-                        titleColor: '#f8fafc',
-                        bodyColor: '#cbd5e1',
-                        borderColor: '#334155',
-                        borderWidth: 1,
-                        padding: 12,
-                        callbacks: {
-                            title(items) {
-                                return items[0]?.label ?? '';
-                            },
-                            label(ctx) {
-                                const idx     = ctx.dataIndex;
-                                const norm    = ctx.parsed.y;
-                                const pct     = (norm - 100).toFixed(2);
-                                const sign    = pct >= 0 ? '+' : '';
-                                let realVal   = '';
-                                if (ctx.datasetIndex === 0) {
-                                    const v = _trendsRawData.invested[idx];
-                                    realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
-                                } else if (ctx.datasetIndex === 1) {
-                                    const v = _trendsRawData.current[idx];
-                                    realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
-                                } else if (ctx.datasetIndex === 2) {
-                                    const v = _trendsRawData.smallcap[idx];
-                                    realVal = v != null ? ` | Real: ${v.toLocaleString('en-IN', {maximumFractionDigits: 2})} pts` : '';
-                                }
-                                return ` ${ctx.dataset.label}: ${norm.toFixed(2)} (${sign}${pct}%)${realVal}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8', font: { size: 11 } }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: {
-                            color: '#94a3b8',
-                            font: { size: 11 },
-                            callback(val) {
-                                const pct = (val - 100).toFixed(1);
-                                const sign = val >= 100 ? '+' : '';
-                                return `${sign}${pct}%`;
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: '% Change from Start (Normalized to 100)',
-                            color: '#94a3b8',
-                            font: { size: 11 }
-                        }
-                    }
-                }
-            }
-        });
+        // Default: render ALL
+        applyTrendsFilter('ALL');
 
     } catch (e) {
         console.error("Failed to render trends chart", e);
     }
 }
+
+function initTrendsFilter() {
+    // Preset buttons
+    document.querySelectorAll('.trends-preset-btn').forEach(btn => {
+        // Remove old listeners by replacing node clone trick
+        const fresh = btn.cloneNode(true);
+        btn.parentNode.replaceChild(fresh, btn);
+        fresh.addEventListener('click', () => {
+            document.querySelectorAll('.trends-preset-btn').forEach(b => b.classList.remove('active'));
+            fresh.classList.add('active');
+            applyTrendsFilter(fresh.dataset.preset);
+        });
+    });
+
+    // Apply button for custom date range
+    const applyBtn = document.getElementById('trends-apply-btn');
+    if (applyBtn) {
+        const freshApply = applyBtn.cloneNode(true);
+        applyBtn.parentNode.replaceChild(freshApply, applyBtn);
+        freshApply.addEventListener('click', () => {
+            // Clear preset active state — this is a custom range
+            document.querySelectorAll('.trends-preset-btn').forEach(b => b.classList.remove('active'));
+            applyTrendsFilter('CUSTOM');
+        });
+    }
+}
+
+function presetDates(preset) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let fromDate = new Date(today);
+
+    switch (preset) {
+        case '1W': fromDate.setDate(today.getDate() - 7);   break;
+        case '1M': fromDate.setMonth(today.getMonth() - 1); break;
+        case '3M': fromDate.setMonth(today.getMonth() - 3); break;
+        case '6M': fromDate.setMonth(today.getMonth() - 6); break;
+        case '1Y': fromDate.setFullYear(today.getFullYear() - 1); break;
+        case 'ALL':
+        default:
+            fromDate = null; // no lower bound
+    }
+    return { fromDate, toDate: today };
+}
+
+function applyTrendsFilter(preset) {
+    if (!_trendsAllData.length) return;
+
+    let filtered;
+    const fromInput = document.getElementById('trends-date-from');
+    const toInput   = document.getElementById('trends-date-to');
+    const rangeEl   = document.getElementById('trends-active-range');
+
+    if (preset === 'CUSTOM') {
+        const fromVal = fromInput?.value;
+        const toVal   = toInput?.value;
+        const from = fromVal ? new Date(fromVal) : null;
+        const to   = toVal   ? new Date(toVal)   : null;
+        if (to) to.setHours(23, 59, 59);
+
+        filtered = _trendsAllData.filter(d => {
+            const dt = new Date(d.date);
+            if (from && dt < from) return false;
+            if (to   && dt > to)   return false;
+            return true;
+        });
+
+        // Update date pickers to reflect selection
+        if (fromInput && fromVal) fromInput.value = fromVal;
+        if (toInput   && toVal)   toInput.value   = toVal;
+
+        if (rangeEl) {
+            rangeEl.innerHTML = fromVal && toVal
+                ? `Showing: <span>${fmtDateLabel(fromVal)}</span> → <span>${fmtDateLabel(toVal)}</span> (${filtered.length} pts)`
+                : '';
+        }
+    } else {
+        const { fromDate, toDate } = presetDates(preset);
+        filtered = _trendsAllData.filter(d => {
+            const dt = new Date(d.date);
+            if (fromDate && dt < fromDate) return false;
+            if (dt > toDate) return false;
+            return true;
+        });
+
+        // Sync date pickers to match preset range
+        if (filtered.length) {
+            const firstFiltered = filtered[0].date.slice(0, 10);
+            const lastFiltered  = filtered[filtered.length - 1].date.slice(0, 10);
+            if (fromInput) fromInput.value = firstFiltered;
+            if (toInput)   toInput.value   = lastFiltered;
+        }
+
+        if (rangeEl) {
+            const label = preset === 'ALL'
+                ? `All available data <span>(${filtered.length} pts)</span>`
+                : `Last <span>${preset}</span> — ${filtered.length} data pts`;
+            rangeEl.innerHTML = label;
+        }
+    }
+
+    if (!filtered.length) {
+        if (rangeEl) rangeEl.innerHTML = '<span style="color:var(--danger)">No data in selected range</span>';
+        return;
+    }
+
+    renderTrendsChart(filtered);
+}
+
+function fmtDateLabel(isoStr) {
+    return new Date(isoStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderTrendsChart(data) {
+    const labels = data.map(d =>
+        new Date(d.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+    );
+
+    const rawInvested = data.map(d => d.total_invested);
+    const rawCurrent  = data.map(d => d.current_value);
+    const rawSmallcap = data.map(d => d.nifty_smallcap_100);
+
+    // Store raw for tooltip
+    _trendsRawData = { invested: rawInvested, current: rawCurrent, smallcap: rawSmallcap };
+
+    // ── Normalize: rebase to 100 at first non-zero point ────────────────
+    function normalize(arr) {
+        const base = arr.find(v => v && v !== 0) || 1;
+        return arr.map(v => v != null ? parseFloat(((v / base) * 100).toFixed(4)) : null);
+    }
+
+    const normInvested = normalize(rawInvested);
+    const normCurrent  = normalize(rawCurrent);
+    const normSmallcap = normalize(rawSmallcap);
+
+    const ctx = document.getElementById('trendsChart').getContext('2d');
+
+    if (_trendsChartInstance) {
+        _trendsChartInstance.destroy();
+    }
+
+    _trendsChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Invested (₹)',
+                    data: normInvested,
+                    borderColor: '#94a3b8',
+                    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 6,
+                    fill: false,
+                },
+                {
+                    label: 'Current Value (₹)',
+                    data: normCurrent,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                    borderWidth: 2.5,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 6,
+                    fill: false,
+                },
+                {
+                    label: 'Nifty SmallCap 100',
+                    data: normSmallcap,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 6,
+                    fill: false,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#e2e8f0',
+                        font: { family: "'Inter', sans-serif", size: 12 },
+                        usePointStyle: true,
+                        padding: 18
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 17, 35, 0.95)',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#cbd5e1',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        title(items) {
+                            return items[0]?.label ?? '';
+                        },
+                        label(ctx) {
+                            const idx     = ctx.dataIndex;
+                            const norm    = ctx.parsed.y;
+                            const pct     = (norm - 100).toFixed(2);
+                            const sign    = pct >= 0 ? '+' : '';
+                            let realVal   = '';
+                            if (ctx.datasetIndex === 0) {
+                                const v = _trendsRawData.invested[idx];
+                                realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
+                            } else if (ctx.datasetIndex === 1) {
+                                const v = _trendsRawData.current[idx];
+                                realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
+                            } else if (ctx.datasetIndex === 2) {
+                                const v = _trendsRawData.smallcap[idx];
+                                realVal = v != null ? ` | Real: ${v.toLocaleString('en-IN', {maximumFractionDigits: 2})} pts` : '';
+                            }
+                            return ` ${ctx.dataset.label}: ${norm.toFixed(2)} (${sign}${pct}%)${realVal}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { size: 11 } }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        callback(val) {
+                            const pct = (val - 100).toFixed(1);
+                            const sign = val >= 100 ? '+' : '';
+                            return `${sign}${pct}%`;
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: '% Change from Start (Normalized to 100)',
+                        color: '#94a3b8',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        }
+    });
+}
+
 
 async function deleteStockHolding(symbol) {
     try {
