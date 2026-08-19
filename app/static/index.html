@@ -950,6 +950,11 @@
                                 style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
                         <input type="text" id="edit-stock-tag" placeholder="e.g. Tech, Core, Dividend">
                     </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Row Highlight Color <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                        <div id="row-color-swatches" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;"></div>
+                        <input type="hidden" id="edit-row-color">
+                    </div>
                     <div class="form-actions"
                         style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
                         <button type="button" class="btn btn-tertiary" id="btn-cancel-edit-modal">Cancel</button>
@@ -964,7 +969,7 @@
 
         <!-- App JavaScript -->
         <script src="auth.js?v=19"></script>
-        <script src="app.js?v=22"></script>
+        <script src="app.js?v=23"></script>
 </body>
 
 </html>

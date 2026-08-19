@@ -580,7 +580,7 @@ function renderStocksTable(stocks) {
             <td>
                 <div class="ticker-cell">
                     <div class="symbol-title-row">
-                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" data-tag="${stock.tag || ''}" title="Click to edit details">
+                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" data-tag="${stock.tag || ''}" data-row-color="${stock.row_color || ''}" title="Click to edit details">
                             <span class="symbol-text editable-display">${displayTitle}</span>
                             <i class="fa-solid fa-pen-to-square edit-pencil"></i>
                         </div>
@@ -637,6 +637,12 @@ function renderStocksTable(stocks) {
             </td>
         `;
 
+        // Apply row highlight color if set
+        if (stock.row_color) {
+            row.style.background = `${stock.row_color}22`;
+            row.style.borderLeft = `3px solid ${stock.row_color}`;
+        }
+
         // Row redirection to detail panel
         row.addEventListener("click", (e) => {
             // Prevent navigating if user clicked the delete button or an editable cell
@@ -686,12 +692,17 @@ function openEditStockModal(cell) {
     const exchange = cell.dataset.exchange;
     const companyName = cell.dataset.companyName;
     const tag = cell.dataset.tag;
+    const rowColor = cell.dataset.rowColor || '';
 
     // Fill Modal Form
     document.getElementById("edit-original-symbol").value = symbol;
     document.getElementById("edit-company-name").value = companyName || "";
     document.getElementById("edit-stock-code").value = stockCode || "";
     document.getElementById("edit-stock-tag").value = tag || "";
+    document.getElementById("edit-row-color").value = rowColor;
+
+    // Reflect swatch selection
+    applySwatchSelection(rowColor);
 
     const exSelect = document.getElementById("edit-exchange");
     if (exchange === "BSE") exSelect.value = "BSE";
@@ -733,6 +744,7 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
     const currentQty = parseFloat(qtyCell.dataset.value);
     const currentPrice = parseFloat(priceCell.dataset.value);
     const newTag = document.getElementById("edit-stock-tag").value.trim();
+    const newRowColor = document.getElementById("edit-row-color").value.trim();
 
     const requestBody = {
         price: currentPrice,
@@ -740,7 +752,8 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
         company_name: newCompanyName,
         stock_code: newStockCode,
         exchange: newExchange,
-        tag: newTag || null
+        tag: newTag || null,
+        row_color: newRowColor || null
     };
 
     const saveBtn = document.getElementById("btn-save-edit-modal");
@@ -776,6 +789,86 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
 let _lastInvested = 0;
 let _lastCurrentVal = 0;
 let _lastSmallcap = 0;
+
+// ==========================================
+// ROW COLOR SWATCH INITIALISATION
+// ==========================================
+const ROW_COLOR_PRESETS = [
+    { label: 'Indigo',   hex: '#6366f1' },
+    { label: 'Violet',   hex: '#8b5cf6' },
+    { label: 'Rose',     hex: '#f43f5e' },
+    { label: 'Amber',    hex: '#f59e0b' },
+    { label: 'Emerald',  hex: '#10b981' },
+    { label: 'Sky',      hex: '#0ea5e9' },
+    { label: 'Teal',     hex: '#14b8a6' },
+    { label: 'Orange',   hex: '#f97316' },
+    { label: 'Lime',     hex: '#84cc16' },
+    { label: 'Pink',     hex: '#ec4899' },
+    { label: 'Cyan',     hex: '#06b6d4' },
+    { label: 'Red',      hex: '#ef4444' },
+];
+
+function applySwatchSelection(selectedHex) {
+    const container = document.getElementById('row-color-swatches');
+    if (!container) return;
+    container.querySelectorAll('.color-swatch').forEach(sw => {
+        if (sw.dataset.hex) {
+            const active = sw.dataset.hex === selectedHex;
+            sw.style.outline = active ? '2px solid #fff' : 'none';
+            sw.style.boxShadow = active ? `0 0 0 3px ${sw.dataset.hex}` : 'none';
+        }
+    });
+    const clearBtn = container.querySelector('.color-swatch-clear');
+    if (clearBtn) {
+        clearBtn.style.outline = !selectedHex ? '2px solid var(--text-muted)' : 'none';
+    }
+}
+
+(function initColorSwatches() {
+    const container = document.getElementById('row-color-swatches');
+    if (!container) return;
+
+    // Clear / None pill
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'color-swatch color-swatch-clear';
+    clearBtn.title = 'No color';
+    clearBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    clearBtn.style.cssText = [
+        'width:28px', 'height:28px', 'border-radius:50%', 'border:1.5px solid var(--border)',
+        'background:var(--surface)', 'color:var(--text-muted)', 'cursor:pointer',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'font-size:0.8rem', 'transition:transform 0.15s,box-shadow 0.15s'
+    ].join(';');
+    clearBtn.addEventListener('mouseenter', () => { clearBtn.style.transform = 'scale(1.15)'; });
+    clearBtn.addEventListener('mouseleave', () => { clearBtn.style.transform = 'scale(1)'; });
+    clearBtn.addEventListener('click', () => {
+        document.getElementById('edit-row-color').value = '';
+        applySwatchSelection('');
+    });
+    container.appendChild(clearBtn);
+
+    // Preset swatches
+    ROW_COLOR_PRESETS.forEach(({ label, hex }) => {
+        const sw = document.createElement('button');
+        sw.type = 'button';
+        sw.className = 'color-swatch';
+        sw.dataset.hex = hex;
+        sw.title = label;
+        sw.style.cssText = [
+            `width:28px`, `height:28px`, `border-radius:50%`, `border:none`,
+            `background:${hex}`, `cursor:pointer`,
+            `transition:transform 0.15s,box-shadow 0.15s`, `flex-shrink:0`
+        ].join(';');
+        sw.addEventListener('mouseenter', () => { sw.style.transform = 'scale(1.2)'; });
+        sw.addEventListener('mouseleave', () => { sw.style.transform = 'scale(1)'; });
+        sw.addEventListener('click', () => {
+            document.getElementById('edit-row-color').value = hex;
+            applySwatchSelection(hex);
+        });
+        container.appendChild(sw);
+    });
+})();
 
 function updateSummaryHeader(stocks) {
     let totalInvested = 0;

@@ -18,7 +18,7 @@ load_dotenv()
 ASSETS_DIR = Path("assets")
 EXCEL_PATH = ASSETS_DIR / "stocks.xlsx"
 COMPANY_NAME_CACHE_FILE = ASSETS_DIR / "company_names.json"
-COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity", "Tag", "Buy Date", "_ts"]
+COLUMNS = ["Company Name", "Stock Code", "Exchange", "Buying Price", "Quantity", "Tag", "Buy Date", "Row Color", "_ts"]
 
 def get_company_name(ticker_obj, symbol: str) -> str:
     import json
@@ -416,6 +416,8 @@ def get_all_stocks_with_metrics(username: str) -> list:
         buying_price = float(row["Buying Price"])
         quantity = float(row["Quantity"])
         tag = str(row.get("Tag", "")).strip()
+        row_color_raw = row.get("Row Color", None)
+        row_color = str(row_color_raw).strip() if row_color_raw and str(row_color_raw).strip() not in ("", "nan", "None") else None
         
         # Build symbol for yfinance
         suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
@@ -478,6 +480,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_change_pct": clean_nan(today_change_pct),
                 "today_return_val": clean_nan(today_return_val),
                 "tag": tag if tag and tag.lower() != "nan" else None,
+                "row_color": row_color,
                 "status": "success",
                 "error": None
             })
@@ -504,6 +507,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_change_pct": None,
                 "today_return_val": None,
                 "tag": tag if tag and tag.lower() != "nan" else None,
+                "row_color": row_color,
                 "status": "error",
                 "error": str(e)
             })
@@ -1169,7 +1173,7 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
     except Exception as e:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
 
-def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str, tag: str = None) -> dict:
+def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str, tag: str = None, row_color: str = None) -> dict:
     """Update only the metadata of a stock in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
@@ -1184,6 +1188,12 @@ def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str
         
     if tag is not None:
         existing["Tag"] = tag.strip()
+
+    # Persist row highlight color (None clears it)
+    if row_color is not None and row_color.strip():
+        existing["Row Color"] = row_color.strip()
+    else:
+        existing["Row Color"] = None
         
     if new_stock_code or new_exchange:
         old_exchange = existing["Exchange"]

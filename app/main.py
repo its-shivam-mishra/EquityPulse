@@ -99,6 +99,7 @@ class StockDetailsUpdateData(BaseModel):
     stock_code: str = Field(..., description="New base ticker symbol")
     exchange: str = Field(..., description="New exchange")
     tag: Optional[str] = Field(None, description="New tag")
+    row_color: Optional[str] = Field(None, description="Row highlight color (hex, e.g. #4f46e5)")
 
 class StockUpdateData(BaseModel):
     company_name: str = Field(..., description="New company name")
@@ -224,9 +225,9 @@ def update_stock_transaction(symbol: str, data: StockUpdateData, username: str =
 
 @app.put("/api/stocks/{symbol}/details")
 def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, username: str = Depends(get_current_user)):
-    """Update only the details (name, code, exchange) of a stock."""
+    """Update only the details (name, code, exchange, tag, row color) of a stock."""
     try:
-        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username, data.tag)
+        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
