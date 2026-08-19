@@ -572,7 +572,7 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
         
     return {"stock_code": stock_code_upper, "action": action}
 
-def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None, tag: str = None) -> dict:
+def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None, tag: str = None, row_color: str = None) -> dict:
     """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB for a user."""
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
@@ -591,6 +591,12 @@ def update_stock(symbol: str, price: float, quantity: float, new_company_name: s
         
     if tag is not None:
         existing["Tag"] = tag.strip()
+
+    # Persist row highlight color (empty/None clears it)
+    if row_color is not None and row_color.strip():
+        existing["Row Color"] = row_color.strip()
+    else:
+        existing["Row Color"] = None
         
     if new_stock_code or new_exchange:
         old_exchange = existing["Exchange"]

@@ -108,6 +108,7 @@ class StockUpdateData(BaseModel):
     price: float = Field(..., gt=0, description="New average buying price per share")
     quantity: float = Field(..., gt=0, description="New quantity of shares")
     tag: Optional[str] = Field(None, description="New tag")
+    row_color: Optional[str] = Field(None, description="Row highlight color (hex, e.g. #4f46e5)")
 
 class DailySnapshotData(BaseModel):
     total_invested: float = Field(..., description="Total invested amount")
@@ -216,7 +217,7 @@ def get_history(symbol: str, period: str = "1y", username: str = Depends(get_cur
 def update_stock_transaction(symbol: str, data: StockUpdateData, username: str = Depends(get_current_user)):
     """Directly update price, quantity, and metadata of a stock in the Excel sheet."""
     try:
-        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username, data.tag)
+        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
