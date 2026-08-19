@@ -775,7 +775,34 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
 
         closeEditStockModal();
         showToast("Stock details updated!", "success");
-        fetchAndRenderStocks(); // full refresh
+
+        // ── Instant visual update: apply color immediately without waiting for the slow API refresh ──
+        const updatedRow = document.querySelector(`tr[data-symbol='${originalSymbol}']`);
+        if (updatedRow) {
+            if (newRowColor) {
+                updatedRow.style.background = `${newRowColor}22`;
+                updatedRow.style.borderLeft = `3px solid ${newRowColor}`;
+            } else {
+                updatedRow.style.background = '';
+                updatedRow.style.borderLeft = '';
+            }
+        }
+
+        // Patch in-memory cache so sort/filter re-renders keep the color
+        if (_currentStocksData) {
+            const cached = _currentStocksData.find(s => s.symbol === originalSymbol);
+            if (cached) {
+                cached.row_color = newRowColor || null;
+                cached.company_name = newCompanyName || cached.company_name;
+                cached.tag = newTag || null;
+            }
+            // Also update the data-row-color attribute on the symbol cell
+            const symbolCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
+            if (symbolCell) symbolCell.dataset.rowColor = newRowColor || '';
+        }
+
+        fetchAndRenderStocks(); // full refresh in background (updates prices etc.)
+
 
     } catch (error) {
         showToast("Update failed: " + error.message, "error");
