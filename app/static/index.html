@@ -147,7 +147,7 @@
                 <div class="logo-area">
                     <div class="brand-group">
                         <img src="logo.png" alt="EquityPulse Logo" class="pulse-logo-img">
-                        <h2 class="brand-text">EquityPulse</h2>
+                        <h2 class="brand-text">EquityPulse 2.0 </h2>
                     </div>
                 </div>
                 <div class="nav-menu">
@@ -531,7 +531,8 @@
                                                 <th class="vs-sortable text-right" data-vsort="price_file">Buy Price
                                                     (File) <i class="fa-solid fa-sort"></i></th>
                                                 <th class="vs-sortable text-right" data-vsort="price_db">Buy Price (DB)
-                                                    <i class="fa-solid fa-sort"></i></th>
+                                                    <i class="fa-solid fa-sort"></i>
+                                                </th>
                                                 <th class="vs-sortable text-right" data-vsort="qty_file">Qty (File) <i
                                                         class="fa-solid fa-sort"></i></th>
                                                 <th class="vs-sortable text-right" data-vsort="qty_db">Qty (DB) <i
@@ -727,7 +728,8 @@
                                 <!-- P/E Ratio -->
                                 <div class="metric-tile">
                                     <div class="metric-icon" style="background: rgba(139,92,246,0.15); color: #a78bfa;">
-                                        <i class="fa-solid fa-percent"></i></div>
+                                        <i class="fa-solid fa-percent"></i>
+                                    </div>
                                     <div class="metric-body">
                                         <span class="metric-label">P/E Ratio (TTM)</span>
                                         <span class="metric-value" id="metric-pe">—</span>
@@ -736,7 +738,8 @@
                                 <!-- EPS -->
                                 <div class="metric-tile">
                                     <div class="metric-icon" style="background: rgba(20,184,166,0.15); color: #2dd4bf;">
-                                        <i class="fa-solid fa-coins"></i></div>
+                                        <i class="fa-solid fa-coins"></i>
+                                    </div>
                                     <div class="metric-body">
                                         <span class="metric-label">EPS (TTM)</span>
                                         <span class="metric-value" id="metric-eps">—</span>
@@ -775,7 +778,8 @@
                                 <!-- Price to Book -->
                                 <div class="metric-tile">
                                     <div class="metric-icon" style="background: rgba(236,72,153,0.15); color: #f472b6;">
-                                        <i class="fa-solid fa-book"></i></div>
+                                        <i class="fa-solid fa-book"></i>
+                                    </div>
                                     <div class="metric-body">
                                         <span class="metric-label">Price / Book</span>
                                         <span class="metric-value" id="metric-pb">—</span>
@@ -872,7 +876,11 @@
                             <div class="card-header"
                                 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
                                 <h3>Historical Portfolio &amp; Index Performance</h3>
-                                <p class="subtitle" style="margin-top: 0.5rem;">All series are <strong>normalized to 100</strong> at their first data point — so you can compare their relative growth on the same scale. Y-axis shows <strong>% change from start</strong>. Hover over the chart to see the exact <strong>real values</strong>. Click legend items to toggle series.
+                                <p class="subtitle" style="margin-top: 0.5rem;">All series are <strong>normalized to
+                                        100</strong> at their first data point — so you can compare their relative
+                                    growth on the same scale. Y-axis shows <strong>% change from start</strong>. Hover
+                                    over the chart to see the exact <strong>real values</strong>. Click legend items to
+                                    toggle series.
                                 </p>
                             </div>
 
@@ -892,7 +900,8 @@
                                 <!-- Custom Date Range -->
                                 <div class="trends-date-range">
                                     <div class="trends-date-field">
-                                        <label for="trends-date-from"><i class="fa-solid fa-calendar-days"></i> From</label>
+                                        <label for="trends-date-from"><i class="fa-solid fa-calendar-days"></i>
+                                            From</label>
                                         <input type="date" id="trends-date-from">
                                     </div>
                                     <span class="trends-date-arrow"><i class="fa-solid fa-arrow-right"></i></span>
@@ -951,8 +960,11 @@
                         <input type="text" id="edit-stock-tag" placeholder="e.g. Tech, Core, Dividend">
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label>Row Highlight Color <span class="optional" style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
-                        <div id="row-color-swatches" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;"></div>
+                        <label>Row Highlight Color <span class="optional"
+                                style="color: var(--text-muted); font-size: 0.8em;">(Optional)</span></label>
+                        <div id="row-color-swatches"
+                            style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
+                        </div>
                         <input type="hidden" id="edit-row-color">
                     </div>
                     <div class="form-actions"
