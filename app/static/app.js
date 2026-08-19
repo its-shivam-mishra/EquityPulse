@@ -492,8 +492,9 @@ function renderStocksTable(stocks) {
 
     tableBody.innerHTML = "";
 
-    // Compute total portfolio investment for weight % calculation
+    // Compute total portfolio investment and current value for weight % calculation
     const totalPortfolioInvested = stocks.reduce((sum, s) => sum + (s.buying_price * s.quantity), 0);
+    const totalPortfolioCurrentValue = stocks.reduce((sum, s) => sum + (s.current_value != null ? s.current_value : s.buying_price * s.quantity), 0);
 
     stocks.forEach((stock, index) => {
         const row = document.createElement("tr");
@@ -613,7 +614,7 @@ function renderStocksTable(stocks) {
             </td>
             <td class="text-right ${gainLossClass}">
                 <div>${currentValText}</div>
-                <div style="font-size: 0.78rem; margin-top: 0.15rem;">${gainLossPctText}</div>
+                <div style="font-size: 0.78rem; margin-top: 0.15rem; color: var(--text-muted);">${(!isError && stock.current_value != null && totalPortfolioCurrentValue > 0) ? '(' + (stock.current_value / totalPortfolioCurrentValue * 100).toFixed(1) + '% of portfolio)' : ''}</div>
             </td>
             <td class="text-right ${todayReturnClass}">
                 <div>${todayReturnText}</div>
