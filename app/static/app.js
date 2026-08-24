@@ -492,9 +492,12 @@ function renderStocksTable(stocks) {
 
     tableBody.innerHTML = "";
 
-    // Compute total portfolio investment and current value for weight % calculation
-    const totalPortfolioInvested = stocks.reduce((sum, s) => sum + (s.buying_price * s.quantity), 0);
-    const totalPortfolioCurrentValue = stocks.reduce((sum, s) => sum + (s.current_value != null ? s.current_value : s.buying_price * s.quantity), 0);
+    // Compute total portfolio investment and current value for weight % calculation.
+    // Always use the FULL (unfiltered) dataset so the % reflects the real portfolio share,
+    // not the share within the current search/filter result.
+    const _allStocks = (_currentStocksData && _currentStocksData.length > 0) ? _currentStocksData : stocks;
+    const totalPortfolioInvested = _allStocks.reduce((sum, s) => sum + (s.buying_price * s.quantity), 0);
+    const totalPortfolioCurrentValue = _allStocks.reduce((sum, s) => sum + (s.current_value != null ? s.current_value : s.buying_price * s.quantity), 0);
 
     stocks.forEach((stock, index) => {
         const row = document.createElement("tr");
