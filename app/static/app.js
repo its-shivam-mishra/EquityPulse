@@ -1040,7 +1040,7 @@ async function saveDailySnapshot() {
 
 let _trendsChartInstance = null;
 // Store raw data for tooltip real-value display
-let _trendsRawData = { invested: [], current: [], smallcap: [] };
+let _trendsRawData = { invested: [], current: [], smallcap: [], dates: [] };
 // Full unfiltered API data cache
 let _trendsAllData = [];
 
@@ -1199,17 +1199,18 @@ function renderTrendsChart(data) {
     const rawInvested = data.map(d => d.total_invested);
     const rawCurrent  = data.map(d => d.current_value);
     const rawSmallcap = data.map(d => d.nifty_smallcap_100);
+    const rawDates    = data.map(d => d.date);
 
     // Store raw for tooltip
-    _trendsRawData = { invested: rawInvested, current: rawCurrent, smallcap: rawSmallcap };
+    _trendsRawData = { invested: rawInvested, current: rawCurrent, smallcap: rawSmallcap, dates: rawDates };
 
-    // ── Normalize: rebase to 100 at first non-zero point ────────────────
+    // ── Normalize: rebase to 100 at first non-zero point → gives % change from start ──
     function normalize(arr) {
         const base = arr.find(v => v && v !== 0) || 1;
         return arr.map(v => v != null ? parseFloat(((v / base) * 100).toFixed(4)) : null);
     }
 
-    const normInvested = normalize(rawInvested);
+    // Only 2 lines: % change in portfolio value and % change in Nifty SmallCap 100
     const normCurrent  = normalize(rawCurrent);
     const normSmallcap = normalize(rawSmallcap);
 
@@ -1219,42 +1220,136 @@ function renderTrendsChart(data) {
         _trendsChartInstance.destroy();
     }
 
+    // ── Custom external tooltip renderer ────────────────────────────────────
+    const externalTooltipHandler = (context) => {
+        const { chart, tooltip } = context;
+
+        let tooltipEl = document.getElementById('trends-custom-tooltip');
+        if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.id = 'trends-custom-tooltip';
+            tooltipEl.style.cssText = [
+                'position:absolute',
+                'z-index:9999',
+                'pointer-events:none',
+                'transition:opacity 0.15s ease, left 0.07s ease, top 0.07s ease',
+                'background:rgba(10,17,35,0.97)',
+                'border:1px solid rgba(99,102,241,0.35)',
+                'border-radius:12px',
+                'padding:14px 16px',
+                'min-width:220px',
+                'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
+                'font-family:Inter,sans-serif',
+            ].join(';');
+            chart.canvas.parentNode.appendChild(tooltipEl);
+        }
+
+        if (tooltip.opacity === 0) {
+            tooltipEl.style.opacity = '0';
+            return;
+        }
+
+        tooltipEl.style.opacity = '1';
+
+        const idx = tooltip.dataPoints?.[0]?.dataIndex;
+        if (idx == null) return;
+
+        const date       = rawDates[idx];
+        const invested   = rawInvested[idx];
+        const current    = rawCurrent[idx];
+        const smallcap   = rawSmallcap[idx];
+        const portNorm   = normCurrent[idx];
+        const scNorm     = normSmallcap[idx];
+
+        const portPct    = portNorm  != null ? (portNorm  - 100).toFixed(2) : null;
+        const scPct      = scNorm    != null ? (scNorm    - 100).toFixed(2) : null;
+
+        const pctColor   = (pct) => pct >= 0 ? '#10b981' : '#ef4444';
+        const pctSign    = (pct) => pct >= 0 ? '+' : '';
+        const fmtINR     = (v) => v != null ? '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
+        const fmtPts     = (v) => v != null ? v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' pts' : '—';
+        const fmtDate    = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        tooltipEl.innerHTML = `
+            <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">
+                ${fmtDate(date)}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                    <span style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:#cbd5e1;">
+                        <span style="width:10px;height:10px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>
+                        Portfolio Value
+                    </span>
+                    <span style="font-weight:700;color:#f8fafc;font-size:0.9rem;">${fmtINR(current)}</span>
+                </div>
+                ${portPct != null ? `<div style="text-align:right;font-size:0.78rem;color:${pctColor(portPct)};font-weight:600;margin-top:-4px;">${pctSign(portPct)}${portPct}% from start</div>` : ''}
+
+                <div style="border-top:1px solid rgba(255,255,255,0.07);margin:2px 0;"></div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                    <span style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:#cbd5e1;">
+                        <span style="width:10px;height:10px;border-radius:50%;background:#94a3b8;display:inline-block;"></span>
+                        Total Invested
+                    </span>
+                    <span style="font-weight:600;color:#e2e8f0;font-size:0.88rem;">${fmtINR(invested)}</span>
+                </div>
+
+                <div style="border-top:1px solid rgba(255,255,255,0.07);margin:2px 0;"></div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                    <span style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:#cbd5e1;">
+                        <span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;"></span>
+                        Nifty SmallCap 100
+                    </span>
+                    <span style="font-weight:700;color:#f8fafc;font-size:0.9rem;">${fmtPts(smallcap)}</span>
+                </div>
+                ${scPct != null ? `<div style="text-align:right;font-size:0.78rem;color:${pctColor(scPct)};font-weight:600;margin-top:-4px;">${pctSign(scPct)}${scPct}% from start</div>` : ''}
+            </div>
+        `;
+
+        // Position tooltip near cursor, clamp to chart bounds
+        const canvasRect  = chart.canvas.getBoundingClientRect();
+        const parentRect  = chart.canvas.parentNode.getBoundingClientRect();
+        const ttWidth     = tooltipEl.offsetWidth || 240;
+        let   leftPos     = tooltip.caretX + 16;
+        if (leftPos + ttWidth > (parentRect.right - parentRect.left)) {
+            leftPos = tooltip.caretX - ttWidth - 16;
+        }
+        tooltipEl.style.left = leftPos + 'px';
+        tooltipEl.style.top  = Math.max(0, tooltip.caretY - 40) + 'px';
+    };
+
     _trendsChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [
                 {
-                    label: 'Total Invested (₹)',
-                    data: normInvested,
-                    borderColor: '#94a3b8',
-                    backgroundColor: 'rgba(148, 163, 184, 0.08)',
-                    borderWidth: 2,
-                    tension: 0.3,
-                    pointRadius: 2,
-                    pointHoverRadius: 6,
-                    fill: false,
-                },
-                {
-                    label: 'Current Value (₹)',
+                    label: '% Change — Portfolio Value',
                     data: normCurrent,
                     borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                    backgroundColor: 'rgba(139, 92, 246, 0.10)',
                     borderWidth: 2.5,
-                    tension: 0.3,
-                    pointRadius: 2,
+                    tension: 0.35,
+                    pointRadius: 0,
                     pointHoverRadius: 6,
-                    fill: false,
+                    pointHoverBackgroundColor: '#8b5cf6',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    fill: { target: 'origin', above: 'rgba(139,92,246,0.07)', below: 'rgba(239,68,68,0.07)' },
                 },
                 {
-                    label: 'Nifty SmallCap 100',
+                    label: '% Change — Nifty SmallCap 100',
                     data: normSmallcap,
                     borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.07)',
                     borderWidth: 2,
-                    tension: 0.3,
-                    pointRadius: 2,
+                    tension: 0.35,
+                    pointRadius: 0,
                     pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#10b981',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
                     fill: false,
                 }
             ]
@@ -1271,66 +1366,42 @@ function renderTrendsChart(data) {
                     position: 'top',
                     labels: {
                         color: '#e2e8f0',
-                        font: { family: "'Inter', sans-serif", size: 12 },
+                        font: { family: "'Inter', sans-serif", size: 12, weight: '500' },
                         usePointStyle: true,
-                        padding: 18
+                        pointStyleWidth: 14,
+                        padding: 22
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(10, 17, 35, 0.95)',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#cbd5e1',
-                    borderColor: '#334155',
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        title(items) {
-                            return items[0]?.label ?? '';
-                        },
-                        label(ctx) {
-                            const idx     = ctx.dataIndex;
-                            const norm    = ctx.parsed.y;
-                            const pct     = (norm - 100).toFixed(2);
-                            const sign    = pct >= 0 ? '+' : '';
-                            let realVal   = '';
-                            if (ctx.datasetIndex === 0) {
-                                const v = _trendsRawData.invested[idx];
-                                realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
-                            } else if (ctx.datasetIndex === 1) {
-                                const v = _trendsRawData.current[idx];
-                                realVal = v != null ? ` | Real: ₹${v.toLocaleString('en-IN', {maximumFractionDigits: 0})}` : '';
-                            } else if (ctx.datasetIndex === 2) {
-                                const v = _trendsRawData.smallcap[idx];
-                                realVal = v != null ? ` | Real: ${v.toLocaleString('en-IN', {maximumFractionDigits: 2})} pts` : '';
-                            }
-                            return ` ${ctx.dataset.label}: ${norm.toFixed(2)} (${sign}${pct}%)${realVal}`;
-                        }
-                    }
+                    enabled: false,
+                    external: externalTooltipHandler,
+                    mode: 'index',
+                    intersect: false,
                 }
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                    ticks: { color: '#94a3b8', font: { size: 11 } }
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    ticks: { color: '#64748b', font: { size: 11, family: "'Inter',sans-serif" }, maxTicksLimit: 12 }
                 },
                 y: {
                     type: 'linear',
                     display: true,
                     position: 'left',
-                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
                     ticks: {
-                        color: '#94a3b8',
+                        color: '#64748b',
                         font: { size: 11 },
                         callback(val) {
-                            const pct = (val - 100).toFixed(1);
-                            const sign = val >= 100 ? '+' : '';
+                            const pct  = (val - 100).toFixed(1);
+                            const sign = parseFloat(pct) >= 0 ? '+' : '';
                             return `${sign}${pct}%`;
                         }
                     },
                     title: {
                         display: true,
-                        text: '% Change from Start (Normalized to 100)',
-                        color: '#94a3b8',
+                        text: '% Change from Start',
+                        color: '#64748b',
                         font: { size: 11 }
                     }
                 }
