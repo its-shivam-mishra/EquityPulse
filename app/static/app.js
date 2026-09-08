@@ -752,13 +752,23 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
     }
 
     // To update, we still need current price and qty because the PUT endpoint requires them.
-    // Let's find the row that corresponds to this symbol.
-    const symbolCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
-    if (!symbolCell) return;
+    // Use doc-id to find the EXACT row for this lot — using data-symbol alone would match
+    // the first row in the DOM for duplicate stocks (same symbol, different lots), causing
+    // the wrong qty/price to be sent and overwriting the target lot with another lot's data.
+    const editDocId = document.getElementById("edit-doc-id").value || '';
+    let targetRow = null;
+    if (editDocId) {
+        targetRow = document.querySelector(`tr[data-doc-id='${editDocId}']`);
+    }
+    if (!targetRow) {
+        // Fallback: find by symbol (safe when there is only one lot)
+        const fallbackCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
+        if (!fallbackCell) return;
+        targetRow = fallbackCell.closest("tr");
+    }
 
-    const row = symbolCell.closest("tr");
-    const qtyCell = row.querySelector(".editable-cell[data-field='quantity']");
-    const priceCell = row.querySelector(".editable-cell[data-field='price']");
+    const qtyCell = targetRow.querySelector(".editable-cell[data-field='quantity']");
+    const priceCell = targetRow.querySelector(".editable-cell[data-field='price']");
 
     const currentQty = parseFloat(qtyCell.dataset.value);
     const currentPrice = parseFloat(priceCell.dataset.value);
@@ -797,7 +807,11 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
         showToast("Stock details updated!", "success");
 
         // ── Instant visual update: apply color immediately without waiting for the slow API refresh ──
-        const updatedRow = document.querySelector(`tr[data-symbol='${originalSymbol}']`);
+        // Use doc-id to target the specific row; fall back to symbol for single-lot stocks.
+        const docIdForUpdate = requestBody.doc_id;
+        const updatedRow = docIdForUpdate
+            ? document.querySelector(`tr[data-doc-id='${docIdForUpdate}']`)
+            : document.querySelector(`tr[data-symbol='${originalSymbol}']`);
         if (updatedRow) {
             if (newRowColor) {
                 updatedRow.style.background = `${newRowColor}22`;
@@ -810,14 +824,17 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
 
         // Patch in-memory cache so sort/filter re-renders keep the color
         if (_currentStocksData) {
-            const cached = _currentStocksData.find(s => s.symbol === originalSymbol);
+            // Match by doc_id for lot-specific stocks; fall back to symbol for legacy single-lot stocks
+            const cached = docIdForUpdate
+                ? _currentStocksData.find(s => s.doc_id === docIdForUpdate)
+                : _currentStocksData.find(s => s.symbol === originalSymbol);
             if (cached) {
                 cached.row_color = newRowColor || null;
                 cached.company_name = newCompanyName || cached.company_name;
                 cached.tag = newTag || null;
             }
-            // Also update the data-row-color attribute on the symbol cell
-            const symbolCell = document.querySelector(`.editable-cell[data-symbol='${originalSymbol}'][data-field='symbol']`);
+            // Also update the data-row-color attribute on the symbol cell of the specific row
+            const symbolCell = updatedRow ? updatedRow.querySelector(`.editable-cell[data-field='symbol']`) : null;
             if (symbolCell) symbolCell.dataset.rowColor = newRowColor || '';
         }
 
@@ -1635,13 +1652,16 @@ function initForms() {
     const HINT_UPDATE = "If the stock symbol already exists, its quantity will increase and the buying price will update to a weighted average.";
 
     if (modeToggle) {
-        modeToggle.querySelectorAll(".mode-option").forEach(label => {
-            label.addEventListener("click", () => {
+        // Use 'change' on the radio inputs instead of 'click' on the label wrapper.
+        // Clicking a <label> that contains a radio fires TWO click events on the label
+        // (the direct user click + the synthetic bubbled click from the radio input),
+        // which can desync the .active class. 'change' fires exactly once per selection.
+        modeToggle.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener("change", () => {
                 modeToggle.querySelectorAll(".mode-option").forEach(l => l.classList.remove("active"));
-                label.classList.add("active");
-                label.querySelector("input").checked = true;
+                radio.closest(".mode-option").classList.add("active");
                 if (hintText) {
-                    hintText.textContent = label.dataset.mode === "update" ? HINT_UPDATE : HINT_ADD;
+                    hintText.textContent = radio.value === "update" ? HINT_UPDATE : HINT_ADD;
                 }
             });
         });
