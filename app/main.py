@@ -93,6 +93,7 @@ class StockTransaction(BaseModel):
     price: float = Field(..., gt=0, description="Purchase price per share")
     quantity: float = Field(..., gt=0, description="Quantity of shares purchased")
     tag: Optional[str] = Field(None, description="Optional tag (e.g. Tech, Core)")
+    mode: str = Field("add", description="Transaction mode: 'add' creates a new row, 'update' merges into existing")
 
 class StockDetailsUpdateData(BaseModel):
     company_name: str = Field(..., description="New company name")
@@ -100,6 +101,7 @@ class StockDetailsUpdateData(BaseModel):
     exchange: str = Field(..., description="New exchange")
     tag: Optional[str] = Field(None, description="New tag")
     row_color: Optional[str] = Field(None, description="Row highlight color (hex, e.g. #4f46e5)")
+    doc_id: Optional[str] = Field(None, description="Cosmos DB document ID for lot-based lookup")
 
 class StockUpdateData(BaseModel):
     company_name: str = Field(..., description="New company name")
@@ -109,6 +111,7 @@ class StockUpdateData(BaseModel):
     quantity: float = Field(..., gt=0, description="New quantity of shares")
     tag: Optional[str] = Field(None, description="New tag")
     row_color: Optional[str] = Field(None, description="Row highlight color (hex, e.g. #4f46e5)")
+    doc_id: Optional[str] = Field(None, description="Cosmos DB document ID for lot-based lookup")
 
 class DailySnapshotData(BaseModel):
     total_invested: float = Field(..., description="Total invested amount")
@@ -128,8 +131,8 @@ def get_stocks(username: str = Depends(get_current_user)):
 def create_stock_transaction(transaction: StockTransaction, username: str = Depends(get_current_user)):
     """
     Add a new stock transaction.
-    If the stock already exists, it merges the transaction:
-    increases quantity and calculates weighted average buying price.
+    mode='add': Always creates a new row (lot) for the stock.
+    mode='update': Merges into an existing row (weighted average price, increased quantity).
     """
     try:
         result = add_stock(
@@ -139,7 +142,8 @@ def create_stock_transaction(transaction: StockTransaction, username: str = Depe
             price=transaction.price,
             quantity=transaction.quantity,
             username=username,
-            tag=transaction.tag
+            tag=transaction.tag,
+            mode=transaction.mode
         )
         return result
     except ValueError as e:
@@ -215,9 +219,9 @@ def get_history(symbol: str, period: str = "1y", username: str = Depends(get_cur
 
 @app.put("/api/stocks/{symbol}")
 def update_stock_transaction(symbol: str, data: StockUpdateData, username: str = Depends(get_current_user)):
-    """Directly update price, quantity, and metadata of a stock in the Excel sheet."""
+    """Directly update price, quantity, and metadata of a stock."""
     try:
-        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color)
+        result = update_stock(symbol, data.price, data.quantity, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color, data.doc_id)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -228,7 +232,7 @@ def update_stock_transaction(symbol: str, data: StockUpdateData, username: str =
 def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, username: str = Depends(get_current_user)):
     """Update only the details (name, code, exchange, tag, row color) of a stock."""
     try:
-        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color)
+        result = update_stock_details(symbol, data.company_name, data.stock_code, data.exchange, username, data.tag, data.row_color, data.doc_id)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -236,10 +240,10 @@ def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, use
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.delete("/api/stocks/{symbol}")
-def remove_stock(symbol: str, username: str = Depends(get_current_user)):
-    """Remove a stock from the portfolio."""
+def remove_stock(symbol: str, doc_id: str = None, username: str = Depends(get_current_user)):
+    """Remove a stock from the portfolio. Pass doc_id query param for lot-specific deletion."""
     try:
-        result = delete_stock(symbol, username)
+        result = delete_stock(symbol, username, doc_id=doc_id)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))

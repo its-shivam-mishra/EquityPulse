@@ -98,11 +98,47 @@ class CosmosDBService:
             return item
         except Exception:
             return None
+
+    def get_stock_by_id(self, item_id: str, exchange: str):
+        """Retrieve a specific stock by its full document id and partition key."""
+        try:
+            item = self.container.read_item(item=item_id, partition_key=exchange)
+            return item
+        except Exception:
+            return None
+
+    def get_stocks_by_symbol(self, symbol: str, exchange: str, username: str):
+        """Retrieve all lots/entries for a given stock symbol for a user.
+        
+        Finds documents whose id starts with '{username}_{symbol}' — this covers
+        both the legacy format ('{username}_{symbol}') and the new lot format
+        ('{username}_{symbol}_lot_{uuid}').
+        """
+        prefix = f"{username}_{symbol}"
+        query = "SELECT * FROM c WHERE c.username = @username AND STARTSWITH(c.id, @prefix)"
+        parameters = [
+            {"name": "@username", "value": username},
+            {"name": "@prefix", "value": prefix}
+        ]
+        items = list(self.container.query_items(
+            query=query,
+            parameters=parameters,
+            partition_key=exchange
+        ))
+        return items
             
     def delete_stock(self, symbol: str, exchange: str, username: str):
         """Delete a stock item for a user."""
         try:
             item_id = f"{username}_{symbol}"
+            self.container.delete_item(item=item_id, partition_key=exchange)
+            return True
+        except Exception:
+            return False
+
+    def delete_stock_by_id(self, item_id: str, exchange: str):
+        """Delete a stock item by its full document id."""
+        try:
             self.container.delete_item(item=item_id, partition_key=exchange)
             return True
         except Exception:

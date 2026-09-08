@@ -499,9 +499,21 @@ function renderStocksTable(stocks) {
     const totalPortfolioInvested = _allStocks.reduce((sum, s) => sum + (s.buying_price * s.quantity), 0);
     const totalPortfolioCurrentValue = _allStocks.reduce((sum, s) => sum + (s.current_value != null ? s.current_value : s.buying_price * s.quantity), 0);
 
+    // Build grouped sequence numbers: same stock_code gets the same sequence number
+    const seqMap = {};
+    let seqCounter = 0;
+    stocks.forEach(stock => {
+        const key = stock.stock_code;
+        if (!(key in seqMap)) {
+            seqCounter++;
+            seqMap[key] = seqCounter;
+        }
+    });
+
     stocks.forEach((stock, index) => {
         const row = document.createElement("tr");
         row.setAttribute("data-symbol", stock.symbol);
+        if (stock.doc_id) row.setAttribute("data-doc-id", stock.doc_id);
 
         // Formatted cells
         const buyPrice = stock.buying_price;
@@ -578,12 +590,13 @@ function renderStocksTable(stocks) {
         const mastertrackerUrl = `https://mastertracker.financiallyfree.in/val/${baseSymbol}`;
 
         const displayTitle = stock.company_name || stock.symbol;
+        const seqNum = seqMap[stock.stock_code] || (index + 1);
         row.innerHTML = `
-            <td class="text-center seq-num">${index + 1}</td>
+            <td class="text-center seq-num">${seqNum}</td>
             <td>
                 <div class="ticker-cell">
                     <div class="symbol-title-row">
-                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" data-tag="${stock.tag || ''}" data-row-color="${stock.row_color || ''}" title="Click to edit details">
+                        <div class="editable-cell symbol-editable" data-field="symbol" data-symbol="${stock.symbol}" data-doc-id="${stock.doc_id || ''}" data-stock-code="${stock.stock_code}" data-exchange="${stock.exchange}" data-company-name="${stock.company_name || stock.stock_code}" data-tag="${stock.tag || ''}" data-row-color="${stock.row_color || ''}" title="Click to edit details">
                             <span class="symbol-text editable-display">${displayTitle}</span>
                             <i class="fa-solid fa-pen-to-square edit-pencil"></i>
                         </div>
@@ -634,7 +647,7 @@ function renderStocksTable(stocks) {
                 <div class="indicator-tags">${smaBadges}</div>
             </td>
             <td class="text-center" style="cursor: default;">
-                <button class="btn btn-danger btn-delete-stock" data-symbol="${stock.symbol}">
+                <button class="btn btn-danger btn-delete-stock" data-symbol="${stock.symbol}" data-doc-id="${stock.doc_id || ''}">
                     <i class="fa-solid fa-trash"></i> Delete
                 </button>
             </td>
@@ -676,8 +689,9 @@ function renderStocksTable(stocks) {
         btn.addEventListener("click", async (e) => {
             e.stopPropagation();
             const symbol = btn.getAttribute("data-symbol");
+            const docId = btn.getAttribute("data-doc-id") || null;
             if (confirm(`Are you sure you want to remove '${symbol}' from your portfolio?`)) {
-                await deleteStockHolding(symbol);
+                await deleteStockHolding(symbol, docId);
             }
         });
     });
@@ -691,6 +705,7 @@ function renderStocksTable(stocks) {
 function openEditStockModal(cell) {
     // Extract data from cell
     const symbol = cell.dataset.symbol;
+    const docId = cell.dataset.docId || '';
     const stockCode = cell.dataset.stockCode;
     const exchange = cell.dataset.exchange;
     const companyName = cell.dataset.companyName;
@@ -699,6 +714,7 @@ function openEditStockModal(cell) {
 
     // Fill Modal Form
     document.getElementById("edit-original-symbol").value = symbol;
+    document.getElementById("edit-doc-id").value = docId;
     document.getElementById("edit-company-name").value = companyName || "";
     document.getElementById("edit-stock-code").value = stockCode || "";
     document.getElementById("edit-stock-tag").value = tag || "";
@@ -756,7 +772,8 @@ document.getElementById("edit-stock-form")?.addEventListener("submit", async (e)
         stock_code: newStockCode,
         exchange: newExchange,
         tag: newTag || null,
-        row_color: newRowColor || null
+        row_color: newRowColor || null,
+        doc_id: document.getElementById("edit-doc-id").value || null
     };
 
     const saveBtn = document.getElementById("btn-save-edit-modal");
@@ -1411,9 +1428,11 @@ function renderTrendsChart(data) {
 }
 
 
-async function deleteStockHolding(symbol) {
+async function deleteStockHolding(symbol, docId) {
     try {
-        const response = await fetch(`/api/stocks/${symbol}`, {
+        let url = `/api/stocks/${encodeURIComponent(symbol)}`;
+        if (docId) url += `?doc_id=${encodeURIComponent(docId)}`;
+        const response = await fetch(url, {
             method: "DELETE"
         });
 
@@ -1550,7 +1569,8 @@ async function commitInlineEdit(cell, symbol) {
         quantity: currentQty,
         company_name: symbolCell.dataset.companyName,
         stock_code: symbolCell.dataset.stockCode,
-        exchange: symbolCell.dataset.exchange
+        exchange: symbolCell.dataset.exchange,
+        doc_id: symbolCell.dataset.docId || null
     };
 
     // Show saving state
@@ -1608,6 +1628,25 @@ function initForms() {
     const form = document.getElementById("stock-form");
     if (!form) return;
 
+    // ── Mode toggle logic ───────────────────────────────────────────────────
+    const modeToggle = document.getElementById("stock-mode-toggle");
+    const hintText = document.getElementById("stock-form-hint");
+    const HINT_ADD = "A new row will be added for this stock. If it already exists, both entries will appear separately in your portfolio.";
+    const HINT_UPDATE = "If the stock symbol already exists, its quantity will increase and the buying price will update to a weighted average.";
+
+    if (modeToggle) {
+        modeToggle.querySelectorAll(".mode-option").forEach(label => {
+            label.addEventListener("click", () => {
+                modeToggle.querySelectorAll(".mode-option").forEach(l => l.classList.remove("active"));
+                label.classList.add("active");
+                label.querySelector("input").checked = true;
+                if (hintText) {
+                    hintText.textContent = label.dataset.mode === "update" ? HINT_UPDATE : HINT_ADD;
+                }
+            });
+        });
+    }
+
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
@@ -1617,6 +1656,10 @@ function initForms() {
         const price = parseFloat(document.getElementById("stock-price").value);
         const qty = parseFloat(document.getElementById("stock-qty").value);
         const tag = document.getElementById("stock-tag").value.trim();
+
+        // Read selected mode from the radio toggle
+        const modeRadio = document.querySelector('input[name="stock-mode"]:checked');
+        const mode = modeRadio ? modeRadio.value : "add";
 
         const submitBtn = document.getElementById("btn-submit-stock");
         const originalBtnHTML = submitBtn.innerHTML;
@@ -1629,7 +1672,7 @@ function initForms() {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ company_name: companyName, stock_code: stockCode, exchange: exchange, price, quantity: qty, tag: tag || null })
+                body: JSON.stringify({ company_name: companyName, stock_code: stockCode, exchange: exchange, price, quantity: qty, tag: tag || null, mode })
             });
 
             if (!response.ok) {
@@ -1642,9 +1685,19 @@ function initForms() {
                 ? "merged (increased quantity & average price updated)"
                 : "added as a new holding";
 
-            showToast(`Stock ${result.symbol} successfully ${actionText}!`, "success");
+            showToast(`Stock ${result.stock_code} successfully ${actionText}!`, "success");
 
             form.reset();
+            // Reset mode toggle back to Add
+            if (modeToggle) {
+                modeToggle.querySelectorAll(".mode-option").forEach(l => l.classList.remove("active"));
+                const addLabel = modeToggle.querySelector('[data-mode="add"]');
+                if (addLabel) {
+                    addLabel.classList.add("active");
+                    addLabel.querySelector("input").checked = true;
+                }
+                if (hintText) hintText.textContent = HINT_ADD;
+            }
             switchView("dashboard-view");
         } catch (error) {
             showToast("Error saving stock: " + error.message, "error");

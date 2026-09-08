@@ -643,6 +643,65 @@ body {
     line-height: 1.4;
 }
 
+/* ─── Stock Mode Toggle (Add / Update) ──────────────────────────────────── */
+.stock-mode-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--bg-main);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    position: relative;
+}
+
+.stock-mode-toggle .mode-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    position: relative;
+    z-index: 1;
+}
+
+.stock-mode-toggle .mode-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.stock-mode-toggle .mode-option:hover:not(.active) {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.stock-mode-toggle .mode-option.active {
+    color: #fff;
+    background: var(--primary);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.stock-mode-toggle .mode-option.active i {
+    animation: modeIconPop 0.3s ease-out;
+}
+
+@keyframes modeIconPop {
+    0% { transform: scale(0.7); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
 .form-grid {
     display: flex;
     flex-direction: column;

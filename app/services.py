@@ -75,7 +75,9 @@ def read_stocks(username: str) -> pd.DataFrame:
         df["Buying Price"] = pd.to_numeric(df["Buying Price"], errors="coerce").fillna(0.0)
         df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0.0)
         df["Tag"] = df["Tag"].astype(str).str.strip()
-        return df[COLUMNS]
+        # Include 'id' for lot-based identification
+        cols_to_return = COLUMNS + (["id"] if "id" in df.columns else [])
+        return df[cols_to_return]
     except Exception as e:
         print(f"Error reading from Cosmos DB: {e}")
         return pd.DataFrame(columns=COLUMNS)
@@ -418,6 +420,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
         tag = str(row.get("Tag", "")).strip()
         row_color_raw = row.get("Row Color", None)
         row_color = str(row_color_raw).strip() if row_color_raw and str(row_color_raw).strip() not in ("", "nan", "None") else None
+        doc_id = str(row.get("id", "")).strip() if "id" in row.index else ""
         
         # Build symbol for yfinance
         suffix = ".NS" if exchange == "NSE" else ".BO" if exchange == "BSE" else ""
@@ -465,6 +468,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "exchange": exchange,
                 "symbol": symbol,
                 "display_symbol": actual_symbol,
+                "doc_id": doc_id,
                 "buying_price": clean_nan(buying_price),
                 "quantity": clean_nan(quantity),
                 "current_price": clean_nan(current_price),
@@ -492,6 +496,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "exchange": exchange,
                 "symbol": symbol,
                 "display_symbol": symbol,
+                "doc_id": doc_id,
                 "buying_price": buying_price,
                 "quantity": quantity,
                 "current_price": None,
@@ -514,11 +519,16 @@ def get_all_stocks_with_metrics(username: str) -> list:
             
     return results
 
-def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float, username: str, tag: str = None) -> dict:
+def add_stock(company_name: str, stock_code: str, exchange: str, price: float, quantity: float, username: str, tag: str = None, mode: str = "add") -> dict:
     """
     Add a stock transaction directly to Cosmos DB for a user.
+    
+    mode="add":    Always create a new row/lot, even if the stock already exists.
+    mode="update": Merge into an existing row (weighted average price, increased quantity).
     """
     from app.cosmos_service import cosmos_service
+    import uuid
+    
     stock_code_upper = stock_code.strip().upper()
     exchange_upper = exchange.strip().upper()
     suffix = ".NS" if exchange_upper == "NSE" else ".BO" if exchange_upper == "BSE" else ""
@@ -528,35 +538,52 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
     # Extract the base stock code after formatting (e.g., removing -SM)
     stock_code_upper = symbol.rsplit(".", 1)[0] if "." in symbol else symbol
 
-    
-    existing = cosmos_service.get_stock(symbol, exchange_upper, username)
-    
     from datetime import datetime
     import pytz
     ist = pytz.timezone('Asia/Kolkata')
     today_str = datetime.now(ist).strftime('%Y-%m-%d')
     
-    if existing:
-        old_price = float(existing.get("Buying Price", 0))
-        old_qty = float(existing.get("Quantity", 0))
+    if mode == "update":
+        # Legacy merge behavior: find existing stock and merge quantity/price
+        existing_lots = cosmos_service.get_stocks_by_symbol(symbol, exchange_upper, username)
         
-        total_qty = old_qty + quantity
-        avg_price = (old_price * old_qty + price * quantity) / total_qty if total_qty > 0 else 0.0
+        if existing_lots:
+            # Merge into the first existing lot
+            existing = existing_lots[0]
+            old_price = float(existing.get("Buying Price", 0))
+            old_qty = float(existing.get("Quantity", 0))
             
-        existing["Buying Price"] = avg_price
-        existing["Quantity"] = total_qty
-        existing["Company Name"] = company_name.strip()
-        if tag is not None:
-            existing["Tag"] = tag.strip()
-            
-        # If they add more quantity today, we could potentially set Buy Date to today if it's the first addition,
-        # but existing means it's a merge. We keep original Buy Date.
-        if "Buy Date" not in existing:
-            existing["Buy Date"] = today_str
-            
-        cosmos_service.upsert_stock(existing, username)
-        action = "merged"
+            total_qty = old_qty + quantity
+            avg_price = (old_price * old_qty + price * quantity) / total_qty if total_qty > 0 else 0.0
+                
+            existing["Buying Price"] = avg_price
+            existing["Quantity"] = total_qty
+            existing["Company Name"] = company_name.strip()
+            if tag is not None:
+                existing["Tag"] = tag.strip()
+                
+            if "Buy Date" not in existing:
+                existing["Buy Date"] = today_str
+                
+            cosmos_service.upsert_stock(existing, username)
+            action = "merged"
+        else:
+            # No existing stock — create new entry (same as add)
+            new_item = {
+                "Company Name": company_name.strip(),
+                "Stock Code": stock_code_upper,
+                "Exchange": exchange_upper,
+                "Buying Price": price,
+                "Quantity": quantity,
+                "Tag": tag.strip() if tag else None,
+                "Buy Date": today_str,
+                "id": f"{username}_{symbol}"
+            }
+            cosmos_service.upsert_stock(new_item, username)
+            action = "added"
     else:
+        # Add mode: always create a new row with a unique lot_id
+        lot_id = uuid.uuid4().hex[:8]
         new_item = {
             "Company Name": company_name.strip(),
             "Stock Code": stock_code_upper,
@@ -565,20 +592,30 @@ def add_stock(company_name: str, stock_code: str, exchange: str, price: float, q
             "Quantity": quantity,
             "Tag": tag.strip() if tag else None,
             "Buy Date": today_str,
-            "id": symbol
+            "id": f"{username}_{symbol}_lot_{lot_id}"
         }
         cosmos_service.upsert_stock(new_item, username)
         action = "added"
         
-    return {"stock_code": stock_code_upper, "action": action}
+    return {"stock_code": stock_code_upper, "action": action, "symbol": symbol}
 
-def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None, tag: str = None, row_color: str = None) -> dict:
-    """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB for a user."""
+def update_stock(symbol: str, price: float, quantity: float, new_company_name: str = None, new_stock_code: str = None, new_exchange: str = None, username: str = None, tag: str = None, row_color: str = None, doc_id: str = None) -> dict:
+    """Directly update price, quantity, and optionally company name, stock code, and exchange in Cosmos DB for a user.
+    
+    If doc_id is provided, use it to look up the specific lot/document.
+    Otherwise fall back to legacy symbol-based lookup.
+    """
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
+    existing = None
+    if doc_id:
+        existing = cosmos_service.get_stock_by_id(doc_id, exchange)
+    
+    if not existing:
+        # Fallback: try legacy lookup
+        existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
             
     if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
@@ -608,23 +645,40 @@ def update_stock(symbol: str, price: float, quantity: float, new_company_name: s
             existing["Exchange"] = new_exchange.strip().upper()
             
         new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
-        new_id = f"{username}_{existing['Stock Code']}{new_suffix}"
+        
+        # Preserve lot suffix if present
+        lot_suffix = ""
+        if "_lot_" in old_id:
+            lot_suffix = "_lot_" + old_id.split("_lot_")[-1]
+        
+        new_id = f"{username}_{existing['Stock Code']}{new_suffix}{lot_suffix}"
         existing["id"] = new_id
         
-        cosmos_service.delete_stock(old_id, old_exchange, username)
+        cosmos_service.delete_stock_by_id(old_id, old_exchange)
         cosmos_service.upsert_stock(existing, username)
     else:
         cosmos_service.upsert_stock(existing, username)
     
     return {"stock_code": existing["Stock Code"], "action": "updated"}
 
-def delete_stock(symbol: str, username: str) -> dict:
-    """Delete a stock from Cosmos DB for a user."""
+def delete_stock(symbol: str, username: str, doc_id: str = None) -> dict:
+    """Delete a stock from Cosmos DB for a user.
+    
+    If doc_id is provided, delete the specific lot/document by its full ID.
+    Otherwise fall back to legacy symbol-based deletion.
+    """
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    success = cosmos_service.delete_stock(formatted_symbol, exchange, username)
+    success = False
+    if doc_id:
+        success = cosmos_service.delete_stock_by_id(doc_id, exchange)
+    
+    if not success:
+        # Fallback: try legacy deletion
+        success = cosmos_service.delete_stock(formatted_symbol, exchange, username)
+    
     if not success:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
@@ -1179,13 +1233,23 @@ def send_portfolio_email(pdf_bytes: bytes) -> dict:
     except Exception as e:
         raise RuntimeError(f"Failed to send email via Azure: {e}")
 
-def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str, tag: str = None, row_color: str = None) -> dict:
-    """Update only the metadata of a stock in Cosmos DB for a user."""
+def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str, new_exchange: str, username: str, tag: str = None, row_color: str = None, doc_id: str = None) -> dict:
+    """Update only the metadata of a stock in Cosmos DB for a user.
+    
+    If doc_id is provided, use it to look up the specific lot/document.
+    Otherwise fall back to legacy symbol-based lookup.
+    """
     from app.cosmos_service import cosmos_service
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
     
-    existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
+    existing = None
+    if doc_id:
+        existing = cosmos_service.get_stock_by_id(doc_id, exchange)
+    
+    if not existing:
+        existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
+    
     if not existing:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
         
@@ -1211,10 +1275,16 @@ def update_stock_details(symbol: str, new_company_name: str, new_stock_code: str
             existing["Exchange"] = new_exchange.strip().upper()
             
         new_suffix = ".NS" if existing["Exchange"] == "NSE" else ".BO" if existing["Exchange"] == "BSE" else ""
-        new_id = f"{username}_{existing['Stock Code']}{new_suffix}"
+        
+        # Preserve lot suffix if present
+        lot_suffix = ""
+        if "_lot_" in old_id:
+            lot_suffix = "_lot_" + old_id.split("_lot_")[-1]
+        
+        new_id = f"{username}_{existing['Stock Code']}{new_suffix}{lot_suffix}"
         existing["id"] = new_id
         
-        cosmos_service.delete_stock(old_id, old_exchange, username)
+        cosmos_service.delete_stock_by_id(old_id, old_exchange)
         cosmos_service.upsert_stock(existing, username)
     else:
         cosmos_service.upsert_stock(existing, username)

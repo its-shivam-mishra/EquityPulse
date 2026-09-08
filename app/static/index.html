@@ -350,8 +350,21 @@
                         <div class="card form-card">
                             <div class="card-header">
                                 <h3>Add or Update Transaction</h3>
-                                <p class="hint-text">If the stock symbol already exists, its quantity will increase, and
-                                    the buying price will update to a weighted average.</p>
+                                <p class="hint-text" id="stock-form-hint">A new row will be added for this stock. If it
+                                    already exists, both entries will appear separately in your portfolio.</p>
+                            </div>
+                            <!-- Mode Toggle: Add / Update -->
+                            <div class="stock-mode-toggle" id="stock-mode-toggle">
+                                <label class="mode-option active" data-mode="add">
+                                    <input type="radio" name="stock-mode" value="add" checked>
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Add Stock</span>
+                                </label>
+                                <label class="mode-option" data-mode="update">
+                                    <input type="radio" name="stock-mode" value="update">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                    <span>Update Stock</span>
+                                </label>
                             </div>
                             <form id="stock-form" class="form-grid">
                                 <div class="form-group">
@@ -934,6 +947,7 @@
                 <form id="edit-stock-form" class="form-grid">
                     <!-- Hidden original symbol to know which one we are updating -->
                     <input type="hidden" id="edit-original-symbol">
+                    <input type="hidden" id="edit-doc-id">
 
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label for="edit-company-name">Company Name <span class="required">*</span></label>
