@@ -458,6 +458,46 @@ function applyCurrentSortAndRender() {
             return 0;
         });
     }
+
+    // ── Keep all lots of the same stock_code grouped together ──────────────────
+    // After individual-row sorting, re-group so that secondary lots (those with
+    // a '_lot_' suffix in doc_id) are always placed immediately after their
+    // primary lot. The primary lot's sort position determines the group position.
+    // This ensures sorting by any column still works correctly — the whole group
+    // moves as a unit, and rows within a group stay adjacent.
+    if (data.some(s => s.doc_id && s.doc_id.includes("_lot_"))) {
+        // Build an ordered list of unique stock_codes as they appear after sorting.
+        // The first occurrence of each stock_code defines the group's position.
+        const groupOrder = [];
+        const seen = new Set();
+        data.forEach(s => {
+            if (!seen.has(s.stock_code)) {
+                seen.add(s.stock_code);
+                groupOrder.push(s.stock_code);
+            }
+        });
+
+        // Bucket rows by stock_code, preserving intra-group order (primary first).
+        const buckets = {};
+        data.forEach(s => {
+            if (!buckets[s.stock_code]) buckets[s.stock_code] = [];
+            buckets[s.stock_code].push(s);
+        });
+
+        // Within each bucket, put the primary lot (no '_lot_' suffix) first.
+        Object.values(buckets).forEach(bucket => {
+            bucket.sort((a, b) => {
+                const aIsLot = a.doc_id && a.doc_id.includes("_lot_");
+                const bIsLot = b.doc_id && b.doc_id.includes("_lot_");
+                if (aIsLot && !bIsLot) return 1;
+                if (!aIsLot && bIsLot) return -1;
+                return 0;
+            });
+        });
+
+        // Flatten back: group by group in the sorted order.
+        data = groupOrder.flatMap(code => buckets[code] || []);
+    }
     renderStocksTable(data);
     updateSortIcons();
 }
