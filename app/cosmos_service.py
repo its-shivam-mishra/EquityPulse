@@ -47,6 +47,13 @@ class CosmosDBService:
             id=self.stats_container_name,
             partition_key=PartitionKey(path="/username")
         )
+
+        # Create SoldStocks container
+        self.sold_stocks_container_name = "SoldStocks"
+        self.sold_stocks_container = self.database.create_container_if_not_exists(
+            id=self.sold_stocks_container_name,
+            partition_key=PartitionKey(path="/username")
+        )
         
     def create_user(self, username: str, password: str):
         """Create a new user with plain text password."""
@@ -178,6 +185,49 @@ class CosmosDBService:
             enable_cross_partition_query=True
         ))
         return items
+
+    def save_sold_stock(self, item: dict, username: str):
+        """Save a sold stock record into the SoldStocks historical container."""
+        item["username"] = username
+        self.sold_stocks_container.upsert_item(body=item)
+        return item
+
+    def get_sold_stocks(self, username: str):
+        """Retrieve all sold/deleted stocks for a user, ordered by sold_ts / sold_date descending."""
+        query = "SELECT * FROM c WHERE c.username = @username ORDER BY c.sold_ts DESC"
+        parameters = [{"name": "@username", "value": username}]
+        try:
+            items = list(self.sold_stocks_container.query_items(
+                query=query,
+                parameters=parameters,
+                partition_key=username
+            ))
+            return items
+        except Exception:
+            # Fallback in case sold_ts index is building or cross-partition query
+            query_fallback = "SELECT * FROM c WHERE c.username = @username"
+            items = list(self.sold_stocks_container.query_items(
+                query=query_fallback,
+                parameters=parameters,
+                enable_cross_partition_query=True
+            ))
+            items.sort(key=lambda x: x.get("sold_ts", 0), reverse=True)
+            return items
+
+    def get_sold_stock_by_id(self, item_id: str, username: str):
+        """Retrieve a specific sold stock by its id."""
+        try:
+            return self.sold_stocks_container.read_item(item=item_id, partition_key=username)
+        except Exception:
+            return None
+
+    def delete_sold_stock(self, item_id: str, username: str):
+        """Permanently delete a sold stock record from history."""
+        try:
+            self.sold_stocks_container.delete_item(item=item_id, partition_key=username)
+            return True
+        except Exception:
+            return False
 
 # Create a singleton instance
 cosmos_service = CosmosDBService()

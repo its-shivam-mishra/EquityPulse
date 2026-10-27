@@ -485,6 +485,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_return_val": clean_nan(today_return_val),
                 "tag": tag if tag and tag.lower() != "nan" else None,
                 "row_color": row_color,
+                "buy_date": buy_date if buy_date and buy_date.lower() not in ("nan", "none", "nat") else None,
                 "status": "success",
                 "error": None
             })
@@ -513,6 +514,7 @@ def get_all_stocks_with_metrics(username: str) -> list:
                 "today_return_val": None,
                 "tag": tag if tag and tag.lower() != "nan" else None,
                 "row_color": row_color,
+                "buy_date": buy_date if buy_date and buy_date.lower() not in ("nan", "none", "nat") else None,
                 "status": "error",
                 "error": str(e)
             })
@@ -661,28 +663,281 @@ def update_stock(symbol: str, price: float, quantity: float, new_company_name: s
     
     return {"stock_code": existing["Stock Code"], "action": "updated"}
 
-def delete_stock(symbol: str, username: str, doc_id: str = None) -> dict:
-    """Delete a stock from Cosmos DB for a user.
+def calculate_holding_metrics(buy_date_str: str, sold_date_str: str, buying_price: float, selling_price: float, quantity: float, tax_cfg: dict = None) -> dict:
+    """Calculate total days held, formatted holding period (X Years, Y Months, Z Days),
+    gross gain, tax deduction, and real gain (net after tax).
     
-    If doc_id is provided, delete the specific lot/document by its full ID.
-    Otherwise fall back to legacy symbol-based deletion.
+    Tax deduction rules:
+    - Deduct 20% if held < 365 days (STCG)
+    - Deduct 12% if held >= 365 days (LTCG)
+    - Values are configurable via tax_config
     """
+    from datetime import datetime, date
+    from dateutil.relativedelta import relativedelta
+    from app.tax_config import get_tax_config
+
+    if tax_cfg is None:
+        tax_cfg = get_tax_config()
+
+    stcg_rate = float(tax_cfg.get("stcg_rate", 0.20))
+    ltcg_rate = float(tax_cfg.get("ltcg_rate", 0.12))
+    threshold_days = int(tax_cfg.get("threshold_days", 365))
+
+    # Helper to parse dates safely
+    def parse_date(d_val):
+        if not d_val:
+            return date.today()
+        if isinstance(d_val, date) and not isinstance(d_val, datetime):
+            return d_val
+        if isinstance(d_val, datetime):
+            return d_val.date()
+        try:
+            clean_str = str(d_val).split("T")[0].split(" ")[0].strip()
+            return datetime.strptime(clean_str, "%Y-%m-%d").date()
+        except Exception:
+            return date.today()
+
+    d_buy = parse_date(buy_date_str)
+    d_sold = parse_date(sold_date_str)
+
+    # 1. Total days held
+    days_held = max(0, (d_sold - d_buy).days)
+
+    # 2. Formatted holding period as (X Years, Y Months, Z Days)
+    rd = relativedelta(d_sold, d_buy)
+    years = max(0, rd.years)
+    months = max(0, rd.months)
+    days = max(0, rd.days)
+
+    y_str = f"{years} Year" if years == 1 else f"{years} Years"
+    m_str = f"{months} Month" if months == 1 else f"{months} Months"
+    d_str = f"{days} Day" if days == 1 else f"{days} Days"
+    holding_period_formatted = f"({y_str}, {m_str}, {d_str})"
+
+    # 3. Financial calculations
+    buying_price = float(buying_price or 0.0)
+    selling_price = float(selling_price or 0.0)
+    quantity = float(quantity or 0.0)
+
+    investment_value = round(buying_price * quantity, 2)
+    selling_value = round(selling_price * quantity, 2)
+    gross_gain = round(selling_value - investment_value, 2)
+    gross_gain_pct = round(((selling_price - buying_price) / buying_price * 100), 2) if buying_price > 0 else 0.0
+
+    # 4. Tax deduction and Real Gain (Net after tax)
+    if days_held < threshold_days:
+        applicable_rate = stcg_rate
+        tax_type = "STCG"
+    else:
+        applicable_rate = ltcg_rate
+        tax_type = "LTCG"
+
+    if gross_gain > 0:
+        tax_deducted = round(gross_gain * applicable_rate, 2)
+        real_gain = round(gross_gain - tax_deducted, 2)
+    else:
+        tax_deducted = 0.0
+        real_gain = gross_gain
+
+    return {
+        "days_held": days_held,
+        "holding_period_formatted": holding_period_formatted,
+        "investment_value": investment_value,
+        "selling_value": selling_value,
+        "gross_gain": gross_gain,
+        "gross_gain_pct": gross_gain_pct,
+        "tax_rate": applicable_rate,
+        "tax_rate_pct": round(applicable_rate * 100, 2),
+        "tax_type": tax_type,
+        "tax_deducted": tax_deducted,
+        "real_gain": real_gain
+    }
+
+def delete_stock(symbol: str, username: str, doc_id: str = None, selling_price: float = None, gross_gain: float = None) -> dict:
+    """Capture a stock into historical database/state (SoldStocks) upon deletion and remove from active stocks."""
     from app.cosmos_service import cosmos_service
+    import pytz
+    from datetime import datetime
+    import uuid
+
     formatted_symbol = format_symbol(symbol).upper()
     exchange = "NSE" if formatted_symbol.endswith(".NS") else "BSE" if formatted_symbol.endswith(".BO") else "NSE"
-    
+
+    # 1. Retrieve the existing active stock document before removing it
+    existing = None
+    if doc_id:
+        existing = cosmos_service.get_stock_by_id(doc_id, exchange)
+    if not existing:
+        existing = cosmos_service.get_stock(formatted_symbol, exchange, username)
+    if not existing:
+        lots = cosmos_service.get_stocks_by_symbol(formatted_symbol, exchange, username)
+        if lots:
+            existing = lots[0]
+
+    ist = pytz.timezone('Asia/Kolkata')
+    now_ist = datetime.now(ist)
+    today_str = now_ist.strftime('%Y-%m-%d')
+    sold_ts = int(now_ist.timestamp())
+
+    sold_record = None
+
+    if existing:
+        company_name = existing.get("Company Name") or formatted_symbol
+        stock_code = existing.get("Stock Code") or formatted_symbol.rsplit(".", 1)[0]
+        stock_exchange = existing.get("Exchange") or exchange
+        buying_price = float(existing.get("Buying Price") or 0.0)
+        quantity = float(existing.get("Quantity") or 0.0)
+        tag = existing.get("Tag")
+
+        # Extract buy date, fallback to _ts, or fallback to today
+        buy_date_str = str(existing.get("Buy Date") or "").strip()
+        if not buy_date_str or buy_date_str.lower() in ["nan", "none", "", "nat"]:
+            ts = existing.get("_ts")
+            if ts:
+                try:
+                    buy_date_str = datetime.fromtimestamp(ts, tz=pytz.utc).astimezone(ist).strftime('%Y-%m-%d')
+                except Exception:
+                    buy_date_str = today_str
+            else:
+                buy_date_str = today_str
+
+        # Resolve selling price
+        resolved_selling_price = selling_price
+        if resolved_selling_price is None or resolved_selling_price <= 0:
+            try:
+                curr_p, _, _, _, _, _, _, _, fetched_name = get_stock_data(formatted_symbol)
+                if fetched_name and company_name == formatted_symbol:
+                    company_name = fetched_name
+                resolved_selling_price = float(curr_p) if curr_p and curr_p > 0 else buying_price
+            except Exception:
+                resolved_selling_price = buying_price
+
+        # Calculate holding period & tax metrics
+        metrics = calculate_holding_metrics(
+            buy_date_str=buy_date_str,
+            sold_date_str=today_str,
+            buying_price=buying_price,
+            selling_price=resolved_selling_price,
+            quantity=quantity
+        )
+
+        sold_record = {
+            "id": f"{username}_{formatted_symbol}_sold_{uuid.uuid4().hex[:8]}",
+            "username": username,
+            "company_name": company_name,
+            "stock_code": stock_code,
+            "exchange": stock_exchange,
+            "symbol": formatted_symbol,
+            "buying_price": buying_price,
+            "selling_price": resolved_selling_price,
+            "quantity": quantity,
+            "buy_date": buy_date_str,
+            "sold_date": today_str,
+            "sold_ts": sold_ts,
+            "tag": tag,
+            "original_doc_id": doc_id or existing.get("id"),
+            **metrics
+        }
+
+        # Save to SoldStocks historical container
+        try:
+            cosmos_service.save_sold_stock(sold_record, username)
+        except Exception as e:
+            print(f"Error archiving to SoldStocks container: {e}")
+
+    # 2. Delete from active stocks container
     success = False
     if doc_id:
         success = cosmos_service.delete_stock_by_id(doc_id, exchange)
-    
+
     if not success:
-        # Fallback: try legacy deletion
         success = cosmos_service.delete_stock(formatted_symbol, exchange, username)
-    
-    if not success:
+
+    if not success and not sold_record:
         raise KeyError(f"Stock '{formatted_symbol}' not found in portfolio.")
-        
-    return {"symbol": formatted_symbol, "action": "deleted"}
+
+    return {
+        "symbol": formatted_symbol,
+        "action": "sold_and_archived",
+        "sold_stock": sold_record,
+        "sold_record": sold_record
+    }
+
+def get_sold_stocks_list(username: str) -> list:
+    """Retrieve all sold stocks for a user, recalculating tax & metrics against active tax configuration."""
+    from app.cosmos_service import cosmos_service
+    from app.tax_config import get_tax_config
+
+    items = cosmos_service.get_sold_stocks(username)
+    tax_cfg = get_tax_config()
+
+    results = []
+    for item in items:
+        # Dynamically refresh metrics based on active tax config
+        buy_date_str = item.get("buy_date", "")
+        sold_date_str = item.get("sold_date", "")
+        buying_price = float(item.get("buying_price", 0.0))
+        selling_price = float(item.get("selling_price", 0.0))
+        quantity = float(item.get("quantity", 0.0))
+
+        metrics = calculate_holding_metrics(
+            buy_date_str=buy_date_str,
+            sold_date_str=sold_date_str,
+            buying_price=buying_price,
+            selling_price=selling_price,
+            quantity=quantity,
+            tax_cfg=tax_cfg
+        )
+
+        item_copy = dict(item)
+        item_copy.update(metrics)
+        results.append(item_copy)
+
+    # Sort newest sold date first
+    results.sort(key=lambda x: (x.get("sold_ts", 0), x.get("sold_date", "")), reverse=True)
+    return results
+
+def delete_sold_stock_permanently(item_id: str, username: str) -> dict:
+    """Permanently delete a sold stock record from historical database."""
+    from app.cosmos_service import cosmos_service
+    success = cosmos_service.delete_sold_stock(item_id, username)
+    if not success:
+        raise KeyError(f"Sold stock record '{item_id}' not found.")
+    return {"id": item_id, "action": "permanently_deleted"}
+
+def restore_sold_stock(item_id: str, username: str) -> dict:
+    """Restore a sold stock back to the active stocks portfolio."""
+    from app.cosmos_service import cosmos_service
+    import uuid
+
+    item = cosmos_service.get_sold_stock_by_id(item_id, username)
+    if not item:
+        raise KeyError(f"Sold stock record '{item_id}' not found.")
+
+    # Reconstruct active stock document
+    symbol = item.get("symbol", "")
+    exchange = item.get("exchange", "NSE")
+    stock_code = item.get("stock_code", "")
+    lot_id = uuid.uuid4().hex[:8]
+
+    active_item = {
+        "Company Name": item.get("company_name", stock_code),
+        "Stock Code": stock_code,
+        "Exchange": exchange,
+        "Buying Price": float(item.get("buying_price", 0.0)),
+        "Quantity": float(item.get("quantity", 0.0)),
+        "Tag": item.get("tag"),
+        "Buy Date": item.get("buy_date"),
+        "id": f"{username}_{symbol}_lot_{lot_id}"
+    }
+
+    # Upsert back into active stocks
+    cosmos_service.upsert_stock(active_item, username)
+
+    # Remove from sold history
+    cosmos_service.delete_sold_stock(item_id, username)
+
+    return {"symbol": symbol, "action": "restored_to_portfolio"}
 
 def _check_portfolio_writable():
     """No-op for Cosmos DB as it handles concurrent writes gracefully."""

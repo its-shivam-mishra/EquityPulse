@@ -24,7 +24,7 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <!-- Chart.js CDN -->
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <link rel="stylesheet" href="style.css?v=19">
+        <link rel="stylesheet" href="style.css?v=20">
         <link rel="stylesheet" href="auth.css?v=2">
         <style id="modal-styles">
             .modal-overlay {
@@ -170,6 +170,10 @@
                     <button class="nav-item" data-target="validate-view" id="nav-validate">
                         <i class="fa-solid fa-clipboard-check"></i>
                         <span>Validate Portfolio</span>
+                    </button>
+                    <button class="nav-item" data-target="sold-history-view" id="nav-sold-history">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>Sold History</span>
                     </button>
                 </div>
                 <div class="nav-footer">
@@ -932,6 +936,155 @@
                         </div>
                     </div><!-- /trends-view -->
 
+                    <!-- VIEW 6: SOLD STOCKS HISTORY -->
+                    <div id="sold-history-view" class="app-view">
+                        <!-- Top Header for Sold Stocks -->
+                        <div class="sold-header-strip">
+                            <div class="sold-header-left">
+                                <h2><i class="fa-solid fa-clock-rotate-left" style="color: var(--primary-hover); margin-right: 0.5rem;"></i>Sold Stocks History</h2>
+                                <p class="subtitle">Historical record of deleted/sold stocks, holding durations, and tax-adjusted net gains</p>
+                            </div>
+                            <div class="sold-header-actions">
+                                <button class="btn btn-secondary" id="btn-open-tax-config" title="Configure capital gains tax rates">
+                                    <i class="fa-solid fa-sliders"></i> Tax Settings (<span id="tax-rates-summary-pill">STCG 20% | LTCG 12%</span>)
+                                </button>
+                                <button class="btn btn-secondary" id="btn-refresh-sold-history" title="Refresh sold stocks data">
+                                    <i class="fa-solid fa-rotate"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Summary KPI Cards -->
+                        <div class="sold-summary-cards">
+                            <div class="sold-summary-card">
+                                <div class="card-icon"><i class="fa-solid fa-layer-group"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Sold Stocks</span>
+                                    <span class="value" id="sold-count-badge">0 Lots</span>
+                                </div>
+                            </div>
+                            <div class="sold-summary-card">
+                                <div class="card-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary-hover);"><i class="fa-solid fa-money-bill-wave"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Total Invested</span>
+                                    <span class="value" id="sold-total-invested">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="sold-summary-card">
+                                <div class="card-icon" style="background: rgba(45, 212, 191, 0.15); color: #2dd4bf;"><i class="fa-solid fa-vault"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Realized Value</span>
+                                    <span class="value" id="sold-total-value">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="sold-summary-card" id="sold-card-gross-gain">
+                                <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);"><i class="fa-solid fa-chart-line"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Gross Gain (P&amp;L)</span>
+                                    <span class="value" id="sold-gross-gain">₹0.00</span>
+                                    <span class="percentage" id="sold-gross-gain-pct">(0.00%)</span>
+                                </div>
+                            </div>
+                            <div class="sold-summary-card">
+                                <div class="card-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);"><i class="fa-solid fa-receipt"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Est. Tax Deducted</span>
+                                    <span class="value" id="sold-total-tax">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="sold-summary-card highlighted-real-gain" id="sold-card-real-gain">
+                                <div class="card-icon" style="background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="fa-solid fa-circle-check"></i></div>
+                                <div class="card-info">
+                                    <span class="label">Real Gain (Net after Tax)</span>
+                                    <span class="value" id="sold-real-gain">₹0.00</span>
+                                    <span class="percentage" id="sold-real-gain-sub" style="color: var(--success);">Net Return</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filter Controls Bar -->
+                        <div class="card sold-filter-card">
+                            <div class="sold-filter-row">
+                                <!-- Preset Pills -->
+                                <div class="sold-filter-group">
+                                    <span class="filter-group-label"><i class="fa-solid fa-clock"></i> Quick Filter:</span>
+                                    <div class="sold-preset-pills" id="sold-preset-pills">
+                                        <button class="sold-preset-btn active" data-filter="all">Show All</button>
+                                        <button class="sold-preset-btn" data-filter="stcg">&lt; 365 Days (STCG - 20%)</button>
+                                        <button class="sold-preset-btn" data-filter="ltcg">&ge; 365 Days (LTCG - 12%)</button>
+                                        <button class="sold-preset-btn" data-filter="under30">&lt; 30 Days</button>
+                                        <button class="sold-preset-btn" data-filter="m1-6">30 – 180 Days</button>
+                                        <button class="sold-preset-btn" data-filter="m6-12">181 – 364 Days</button>
+                                    </div>
+                                </div>
+
+                                <!-- Custom Days Held Filter Range -->
+                                <div class="sold-custom-range-group">
+                                    <span class="filter-group-label"><i class="fa-solid fa-filter"></i> Custom Range (Days Held):</span>
+                                    <div class="sold-range-inputs">
+                                        <div class="input-with-label">
+                                            <input type="number" id="sold-filter-min-days" placeholder="Min" min="0">
+                                            <span class="input-unit">days</span>
+                                        </div>
+                                        <span class="range-separator"><i class="fa-solid fa-arrow-right"></i></span>
+                                        <div class="input-with-label">
+                                            <input type="number" id="sold-filter-max-days" placeholder="Max" min="0">
+                                            <span class="input-unit">days</span>
+                                        </div>
+                                        <button class="btn btn-primary btn-sm" id="btn-apply-days-filter">
+                                            <i class="fa-solid fa-check"></i> Apply
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm" id="btn-reset-days-filter">
+                                            <i class="fa-solid fa-rotate-left"></i> Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Search & Results Count Strip -->
+                            <div class="sold-filter-subrow">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="sold-search-input" placeholder="Search by stock name or code (e.g. RELIANCE)...">
+                                </div>
+                                <div class="sold-filter-status" id="sold-filter-status">
+                                    Showing all sold stocks
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Table Card -->
+                        <div class="card table-card" style="padding: 0; overflow: visible; margin-top: 1.25rem;">
+                            <div class="table-responsive">
+                                <table class="stock-table sold-table" id="sold-stocks-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-center col-seq">#</th>
+                                            <th class="sortable" data-sold-sort="company_name">Stock Name <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-center sortable" data-sold-sort="sold_date">Buy &amp; Sold Dates <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable" data-sold-sort="quantity">Qty &amp; Prices <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-center sortable" data-sold-sort="days_held">Total Holding Period <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-center">Tax Type</th>
+                                            <th class="text-right sortable" data-sold-sort="gross_gain">Gross Gain <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-right sortable highlight-th" data-sold-sort="real_gain">Real Gain (Net after Tax) <i class="fa-solid fa-sort"></i></th>
+                                            <th class="text-center" style="width: 100px;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sold-table-body">
+                                        <!-- Populated dynamically via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Empty State Message -->
+                            <div class="sold-empty-state hidden" id="sold-empty-state">
+                                <i class="fa-solid fa-box-open empty-icon"></i>
+                                <h3>No Sold Stocks Found</h3>
+                                <p id="sold-empty-message">When you delete stocks from your active portfolio, their records and performance will appear here automatically.</p>
+                            </div>
+                        </div>
+                    </div><!-- /sold-history-view -->
+
                 </section>
             </main>
         </div>
@@ -986,12 +1139,61 @@
             </div>
         </div>
 
+        <!-- Tax Configuration Modal -->
+        <div id="tax-config-modal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-sliders" style="color: var(--primary-hover); margin-right: 0.5rem;"></i>Capital Gains Tax Configuration</h3>
+                    <button type="button" class="btn-close-modal" id="btn-close-tax-modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="tax-config-form" class="form-grid">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <p class="hint-text" style="margin-bottom: 0.5rem; font-size: 0.88rem; color: var(--text-muted);">
+                            Configure tax deduction rates applied to profit/gain amounts based on total holding period.
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tax-stcg-rate">STCG Deduction Rate (&lt; Threshold) <span class="required">*</span></label>
+                        <div class="input-with-label">
+                            <input type="number" id="tax-stcg-rate" step="0.1" min="0" max="100" required>
+                            <span class="input-unit">%</span>
+                        </div>
+                        <small style="color: var(--text-muted); font-size: 0.78rem;">Default: 20% (&lt; 365 days)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tax-ltcg-rate">LTCG Deduction Rate (&ge; Threshold) <span class="required">*</span></label>
+                        <div class="input-with-label">
+                            <input type="number" id="tax-ltcg-rate" step="0.1" min="0" max="100" required>
+                            <span class="input-unit">%</span>
+                        </div>
+                        <small style="color: var(--text-muted); font-size: 0.78rem;">Default: 12% (&ge; 365 days)</small>
+                    </div>
+
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="tax-threshold-days">Holding Period Threshold (Days) <span class="required">*</span></label>
+                        <div class="input-with-label">
+                            <input type="number" id="tax-threshold-days" min="1" step="1" required>
+                            <span class="input-unit">days</span>
+                        </div>
+                        <small style="color: var(--text-muted); font-size: 0.78rem;">Default: 365 days (1 Year separation between STCG and LTCG)</small>
+                    </div>
+
+                    <div class="form-actions" style="grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
+                        <button type="button" class="btn btn-tertiary" id="btn-cancel-tax-modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btn-save-tax-modal">Save Tax Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Notification Toast System -->
         <div id="toast-container" class="toast-container"></div>
 
         <!-- App JavaScript -->
         <script src="auth.js?v=19"></script>
-        <script src="app.js?v=26"></script>
+        <script src="app.js?v=27"></script>
 </body>
 
 </html>

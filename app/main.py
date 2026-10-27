@@ -19,7 +19,10 @@ from app.services import (
     merge_uploaded_file,
     validate_portfolio_file,
     send_portfolio_email,
-    update_stock_details
+    update_stock_details,
+    get_sold_stocks_list,
+    delete_sold_stock_permanently,
+    restore_sold_stock
 )
 from app.pdf_generator import generate_portfolio_pdf
 
@@ -117,6 +120,11 @@ class DailySnapshotData(BaseModel):
     total_invested: float = Field(..., description="Total invested amount")
     current_value: float = Field(..., description="Current portfolio value")
     nifty_smallcap_100: float = Field(..., description="Current Nifty SmallCap 100 value")
+
+class TaxConfigUpdate(BaseModel):
+    stcg_rate: float = Field(..., ge=0.0, le=1.0, description="Short-term capital gains tax rate (e.g. 0.20 for 20%)")
+    ltcg_rate: float = Field(..., ge=0.0, le=1.0, description="Long-term capital gains tax rate (e.g. 0.12 for 12%)")
+    threshold_days: int = Field(365, ge=1, description="Threshold days between STCG and LTCG (e.g. 365)")
 
 # API Endpoints
 @app.get("/api/stocks")
@@ -240,15 +248,70 @@ def update_stock_details_endpoint(symbol: str, data: StockDetailsUpdateData, use
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.delete("/api/stocks/{symbol}")
-def remove_stock(symbol: str, doc_id: str = None, username: str = Depends(get_current_user)):
-    """Remove a stock from the portfolio. Pass doc_id query param for lot-specific deletion."""
+def remove_stock(
+    symbol: str, 
+    doc_id: Optional[str] = None, 
+    selling_price: Optional[float] = None, 
+    gross_gain: Optional[float] = None, 
+    username: str = Depends(get_current_user)
+):
+    """
+    Remove a stock from the active portfolio.
+    Captures the record into historical state (SoldStocks) with holding period and tax metrics.
+    Pass doc_id for lot-specific deletion, selling_price/gross_gain if captured from active UI.
+    """
     try:
-        result = delete_stock(symbol, username, doc_id=doc_id)
+        result = delete_stock(symbol, username, doc_id=doc_id, selling_price=selling_price, gross_gain=gross_gain)
         return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/api/stocks/history/sold")
+def get_sold_stocks_history(username: str = Depends(get_current_user)):
+    """Retrieve all sold/archived stocks history for the authenticated user."""
+    try:
+        return get_sold_stocks_list(username)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch sold stocks history: {e}")
+
+@app.delete("/api/stocks/history/sold/{item_id}")
+def delete_sold_stock_record(item_id: str, username: str = Depends(get_current_user)):
+    """Permanently delete a sold stock record from history."""
+    try:
+        return delete_sold_stock_permanently(item_id, username)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.post("/api/stocks/history/sold/{item_id}/restore")
+def restore_sold_stock_to_portfolio(item_id: str, username: str = Depends(get_current_user)):
+    """Restore a previously sold stock back to the active stocks portfolio."""
+    try:
+        return restore_sold_stock(item_id, username)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/api/tax-config")
+def get_tax_configuration(username: str = Depends(get_current_user)):
+    """Get active capital gains tax rates and holding period threshold."""
+    from app.tax_config import get_tax_config
+    return get_tax_config()
+
+@app.put("/api/tax-config")
+def update_tax_configuration(config: TaxConfigUpdate, username: str = Depends(get_current_user)):
+    """Update active capital gains tax rates and threshold days."""
+    from app.tax_config import update_tax_config
+    try:
+        return update_tax_config(config.stcg_rate, config.ltcg_rate, config.threshold_days)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update tax configuration: {e}")
 
 
 @app.post("/api/report/email")

@@ -74,6 +74,7 @@ function initApp() {
     initMaskToggle();
     initColumnVisibility();
     initValidate();
+    initSoldStocks();
 }
 
 function initMaskToggle() {
@@ -242,6 +243,8 @@ function switchView(viewId) {
         fetchAndRenderStocks();
     } else if (viewId === "trends-view") {
         fetchAndRenderTrends();
+    } else if (viewId === "sold-history-view") {
+        fetchAndRenderSoldStocks();
     }
 }
 
@@ -1488,7 +1491,24 @@ function renderTrendsChart(data) {
 async function deleteStockHolding(symbol, docId) {
     try {
         let url = `/api/stocks/${encodeURIComponent(symbol)}`;
-        if (docId) url += `?doc_id=${encodeURIComponent(docId)}`;
+        const params = new URLSearchParams();
+        if (docId) params.append("doc_id", docId);
+
+        // Capture current market price and gain/loss at time of deletion
+        const stock = _currentStocksData ? _currentStocksData.find(s => (docId && s.doc_id === docId) || s.symbol === symbol) : null;
+        if (stock) {
+            if (stock.current_price != null && !isNaN(stock.current_price)) {
+                params.append("selling_price", stock.current_price);
+            }
+            if (stock.gain_loss != null && !isNaN(stock.gain_loss)) {
+                params.append("gross_gain", stock.gain_loss);
+            }
+        }
+
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+
         const response = await fetch(url, {
             method: "DELETE"
         });
@@ -1498,8 +1518,11 @@ async function deleteStockHolding(symbol, docId) {
             throw new Error(err.detail || "Failed to delete stock");
         }
 
-        showToast(`Successfully deleted ${symbol}`, "success");
+        showToast(`Archived ${symbol} to Sold Stocks History`, "success");
         fetchAndRenderStocks();
+        if (typeof fetchAndRenderSoldStocks === "function") {
+            fetchAndRenderSoldStocks();
+        }
     } catch (error) {
         showToast("Error deleting stock: " + error.message, "error");
     }
@@ -2807,3 +2830,494 @@ function renderValidateTable(data, filter) {
         tbody.appendChild(tr);
     });
 }
+
+/* ==========================================================================
+   SOLD STOCKS HISTORY SYSTEM
+   ========================================================================== */
+
+let _soldStocksData = [];
+let _activeDaysFilter = { type: 'all' };
+let _soldSearchQuery = '';
+let _soldSortColumn = 'sold_ts';
+let _soldSortDirection = 'desc';
+let _currentTaxConfig = { stcg_rate: 0.20, ltcg_rate: 0.12, threshold_days: 365 };
+
+function initSoldStocks() {
+    // 1. Quick preset buttons
+    const presetBtns = document.querySelectorAll(".sold-preset-btn");
+    presetBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            presetBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const filterType = btn.getAttribute("data-filter");
+            _activeDaysFilter = { type: 'preset', preset: filterType };
+
+            // Clear custom inputs when preset is chosen
+            const minInput = document.getElementById("sold-filter-min-days");
+            const maxInput = document.getElementById("sold-filter-max-days");
+            if (minInput) minInput.value = "";
+            if (maxInput) maxInput.value = "";
+
+            applySoldFilterAndRender();
+        });
+    });
+
+    // 2. Custom Range Inputs (Days Held)
+    const btnApplyDays = document.getElementById("btn-apply-days-filter");
+    if (btnApplyDays) {
+        btnApplyDays.addEventListener("click", () => {
+            const minVal = document.getElementById("sold-filter-min-days").value;
+            const maxVal = document.getElementById("sold-filter-max-days").value;
+            const minDays = minVal !== "" ? parseInt(minVal, 10) : null;
+            const maxDays = maxVal !== "" ? parseInt(maxVal, 10) : null;
+
+            if (minDays != null && maxDays != null && minDays > maxDays) {
+                showToast("Min days cannot be greater than Max days", "warning");
+                return;
+            }
+
+            presetBtns.forEach(b => b.classList.remove("active"));
+            _activeDaysFilter = { type: 'custom', min: minDays, max: maxDays };
+            applySoldFilterAndRender();
+        });
+    }
+
+    const btnResetDays = document.getElementById("btn-reset-days-filter");
+    if (btnResetDays) {
+        btnResetDays.addEventListener("click", () => {
+            const minInput = document.getElementById("sold-filter-min-days");
+            const maxInput = document.getElementById("sold-filter-max-days");
+            if (minInput) minInput.value = "";
+            if (maxInput) maxInput.value = "";
+
+            presetBtns.forEach(b => b.classList.remove("active"));
+            const allBtn = document.querySelector(".sold-preset-btn[data-filter='all']");
+            if (allBtn) allBtn.classList.add("active");
+
+            _activeDaysFilter = { type: 'all' };
+            applySoldFilterAndRender();
+        });
+    }
+
+    // 3. Search box
+    const searchInput = document.getElementById("sold-search-input");
+    if (searchInput) {
+        searchInput.addEventListener("input", (e) => {
+            _soldSearchQuery = e.target.value.trim().toLowerCase();
+            applySoldFilterAndRender();
+        });
+    }
+
+    // 4. Refresh button
+    const btnRefresh = document.getElementById("btn-refresh-sold-history");
+    if (btnRefresh) {
+        btnRefresh.addEventListener("click", () => {
+            fetchAndRenderSoldStocks();
+        });
+    }
+
+    // 5. Tax Config Modal Wiring
+    const btnOpenTax = document.getElementById("btn-open-tax-config");
+    const taxModal = document.getElementById("tax-config-modal");
+    const btnCloseTax = document.getElementById("btn-close-tax-modal");
+    const btnCancelTax = document.getElementById("btn-cancel-tax-modal");
+    const taxForm = document.getElementById("tax-config-form");
+
+    if (btnOpenTax && taxModal) {
+        btnOpenTax.addEventListener("click", () => {
+            document.getElementById("tax-stcg-rate").value = (_currentTaxConfig.stcg_rate * 100).toFixed(1);
+            document.getElementById("tax-ltcg-rate").value = (_currentTaxConfig.ltcg_rate * 100).toFixed(1);
+            document.getElementById("tax-threshold-days").value = _currentTaxConfig.threshold_days || 365;
+            taxModal.classList.remove("hidden");
+        });
+    }
+
+    const closeTaxModal = () => {
+        if (taxModal) taxModal.classList.add("hidden");
+    };
+
+    if (btnCloseTax) btnCloseTax.addEventListener("click", closeTaxModal);
+    if (btnCancelTax) btnCancelTax.addEventListener("click", closeTaxModal);
+
+    if (taxForm) {
+        taxForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const stcgInput = parseFloat(document.getElementById("tax-stcg-rate").value);
+            const ltcgInput = parseFloat(document.getElementById("tax-ltcg-rate").value);
+            const thresholdInput = parseInt(document.getElementById("tax-threshold-days").value, 10);
+
+            if (isNaN(stcgInput) || isNaN(ltcgInput) || isNaN(thresholdInput)) {
+                showToast("Please enter valid numeric tax rates", "warning");
+                return;
+            }
+
+            try {
+                const response = await fetch("/api/tax-config", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        stcg_rate: stcgInput / 100,
+                        ltcg_rate: ltcgInput / 100,
+                        threshold_days: thresholdInput
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Failed to update tax rates");
+                }
+
+                _currentTaxConfig = await response.json();
+                closeTaxModal();
+                showToast("Tax configuration updated successfully!", "success");
+                fetchAndRenderSoldStocks();
+            } catch (err) {
+                showToast("Error updating tax configuration: " + err.message, "error");
+            }
+        });
+    }
+
+    // 6. Table Sorting
+    const sortHeaders = document.querySelectorAll("[data-sold-sort]");
+    sortHeaders.forEach(th => {
+        th.addEventListener("click", () => {
+            const col = th.getAttribute("data-sold-sort");
+            if (_soldSortColumn === col) {
+                _soldSortDirection = _soldSortDirection === "asc" ? "desc" : "asc";
+            } else {
+                _soldSortColumn = col;
+                _soldSortDirection = col === "company_name" ? "asc" : "desc";
+            }
+
+            // Update header icons
+            sortHeaders.forEach(h => {
+                const icon = h.querySelector("i");
+                if (icon) {
+                    if (h === th) {
+                        icon.className = _soldSortDirection === "asc" ? "fa-solid fa-sort-up" : "fa-solid fa-sort-down";
+                    } else {
+                        icon.className = "fa-solid fa-sort";
+                    }
+                }
+            });
+
+            applySoldFilterAndRender();
+        });
+    });
+}
+
+async function fetchAndRenderSoldStocks() {
+    try {
+        const [stocksRes, taxRes] = await Promise.all([
+            fetch("/api/stocks/history/sold"),
+            fetch("/api/tax-config")
+        ]);
+
+        if (taxRes.ok) {
+            _currentTaxConfig = await taxRes.json();
+            const pill = document.getElementById("tax-rates-summary-pill");
+            if (pill) {
+                pill.textContent = `STCG ${(_currentTaxConfig.stcg_rate * 100).toFixed(0)}% | LTCG ${(_currentTaxConfig.ltcg_rate * 100).toFixed(0)}%`;
+            }
+        }
+
+        if (stocksRes.ok) {
+            _soldStocksData = await stocksRes.json();
+            applySoldFilterAndRender();
+        }
+    } catch (error) {
+        console.error("Error fetching sold stocks history:", error);
+        showToast("Failed to load sold stocks history: " + error.message, "error");
+    }
+}
+
+function applySoldFilterAndRender() {
+    let filtered = [..._soldStocksData];
+    const threshold = _currentTaxConfig.threshold_days || 365;
+
+    // 1. Days Held filter
+    if (_activeDaysFilter.type === 'preset') {
+        const p = _activeDaysFilter.preset;
+        if (p === 'stcg') {
+            filtered = filtered.filter(s => (s.days_held || 0) < threshold);
+        } else if (p === 'ltcg') {
+            filtered = filtered.filter(s => (s.days_held || 0) >= threshold);
+        } else if (p === 'under30') {
+            filtered = filtered.filter(s => (s.days_held || 0) < 30);
+        } else if (p === 'm1-6') {
+            filtered = filtered.filter(s => (s.days_held || 0) >= 30 && (s.days_held || 0) <= 180);
+        } else if (p === 'm6-12') {
+            filtered = filtered.filter(s => (s.days_held || 0) > 180 && (s.days_held || 0) < threshold);
+        }
+    } else if (_activeDaysFilter.type === 'custom') {
+        const { min, max } = _activeDaysFilter;
+        if (min != null) {
+            filtered = filtered.filter(s => (s.days_held || 0) >= min);
+        }
+        if (max != null) {
+            filtered = filtered.filter(s => (s.days_held || 0) <= max);
+        }
+    }
+
+    // 2. Search query filter
+    if (_soldSearchQuery) {
+        filtered = filtered.filter(s => {
+            const name = (s.company_name || '').toLowerCase();
+            const code = (s.stock_code || '').toLowerCase();
+            const symbol = (s.symbol || '').toLowerCase();
+            return name.includes(_soldSearchQuery) || code.includes(_soldSearchQuery) || symbol.includes(_soldSearchQuery);
+        });
+    }
+
+    // 3. Sorting
+    filtered.sort((a, b) => {
+        let valA = a[_soldSortColumn];
+        let valB = b[_soldSortColumn];
+        if (valA == null) valA = 0;
+        if (valB == null) valB = 0;
+
+        if (typeof valA === 'string') {
+            return _soldSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return _soldSortDirection === 'asc' ? valA - valB : valB - valA;
+    });
+
+    // 4. Update Summary KPI Cards
+    updateSoldSummaryCards(filtered);
+
+    // 5. Update Status Text
+    const statusEl = document.getElementById("sold-filter-status");
+    if (statusEl) {
+        if (_soldStocksData.length === 0) {
+            statusEl.textContent = "0 sold stocks recorded";
+        } else {
+            statusEl.textContent = `Showing ${filtered.length} of ${_soldStocksData.length} sold stocks`;
+        }
+    }
+
+    // 6. Render rows or empty state
+    renderSoldTable(filtered);
+}
+
+function updateSoldSummaryCards(items) {
+    const totalCount = items.length;
+    const totalInvested = items.reduce((sum, s) => sum + (parseFloat(s.investment_value) || 0), 0);
+    const totalValue = items.reduce((sum, s) => sum + (parseFloat(s.selling_value) || 0), 0);
+    const totalGrossGain = items.reduce((sum, s) => sum + (parseFloat(s.gross_gain) || 0), 0);
+    const totalTax = items.reduce((sum, s) => sum + (parseFloat(s.tax_deducted) || 0), 0);
+    const totalRealGain = items.reduce((sum, s) => sum + (parseFloat(s.real_gain) || 0), 0);
+
+    const grossGainPct = totalInvested > 0 ? (totalGrossGain / totalInvested * 100) : 0.0;
+    const realGainPct = totalInvested > 0 ? (totalRealGain / totalInvested * 100) : 0.0;
+
+    const countEl = document.getElementById("sold-count-badge");
+    const investedEl = document.getElementById("sold-total-invested");
+    const valueEl = document.getElementById("sold-total-value");
+    const grossEl = document.getElementById("sold-gross-gain");
+    const grossPctEl = document.getElementById("sold-gross-gain-pct");
+    const taxEl = document.getElementById("sold-total-tax");
+    const realEl = document.getElementById("sold-real-gain");
+    const realSubEl = document.getElementById("sold-real-gain-sub");
+
+    const fmtInr = (n) => "₹" + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (countEl) countEl.textContent = `${totalCount} ${totalCount === 1 ? 'Lot' : 'Lots'}`;
+    if (investedEl) investedEl.textContent = fmtInr(totalInvested);
+    if (valueEl) valueEl.textContent = fmtInr(totalValue);
+
+    if (grossEl) {
+        grossEl.textContent = (totalGrossGain < 0 ? "-" : "+") + fmtInr(totalGrossGain);
+        grossEl.style.color = totalGrossGain >= 0 ? "var(--success)" : "var(--danger)";
+    }
+    if (grossPctEl) {
+        grossPctEl.textContent = `(${totalGrossGain >= 0 ? '+' : ''}${grossGainPct.toFixed(2)}%)`;
+        grossPctEl.style.color = totalGrossGain >= 0 ? "var(--success)" : "var(--danger)";
+    }
+
+    if (taxEl) taxEl.textContent = fmtInr(totalTax);
+
+    if (realEl) {
+        realEl.textContent = (totalRealGain < 0 ? "-" : "+") + fmtInr(totalRealGain);
+        realEl.style.color = totalRealGain >= 0 ? "var(--success)" : "var(--danger)";
+    }
+    if (realSubEl) {
+        realSubEl.textContent = `${totalRealGain >= 0 ? '+' : ''}${realGainPct.toFixed(2)}% net post-tax`;
+        realSubEl.style.color = totalRealGain >= 0 ? "var(--success)" : "var(--danger)";
+    }
+}
+
+function renderSoldTable(items) {
+    const tbody = document.getElementById("sold-table-body");
+    const emptyState = document.getElementById("sold-empty-state");
+    const emptyMsg = document.getElementById("sold-empty-message");
+
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (items.length === 0) {
+        if (emptyState) {
+            emptyState.classList.remove("hidden");
+            if (_soldStocksData.length === 0) {
+                if (emptyMsg) emptyMsg.textContent = "When you delete stocks from your active portfolio, their records and holding performance will appear here automatically.";
+            } else {
+                if (emptyMsg) emptyMsg.textContent = "No sold stocks match the selected holding period range or search criteria. Try selecting 'Show All' or clearing the custom filter.";
+            }
+        }
+        return;
+    }
+
+    if (emptyState) emptyState.classList.add("hidden");
+
+    const fmtInr = (n) => "₹" + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const formatDateStr = (dateStr) => {
+        if (!dateStr || dateStr.toLowerCase() in ["nan", "none", "", "nat"]) return "—";
+        try {
+            const clean = String(dateStr).split("T")[0];
+            const [y, m, d] = clean.split("-");
+            if (y && m && d) {
+                const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+            }
+            return clean;
+        } catch {
+            return dateStr;
+        }
+    };
+
+    items.forEach((stock, idx) => {
+        const tr = document.createElement("tr");
+
+        const grossPositive = (stock.gross_gain || 0) >= 0;
+        const realPositive = (stock.real_gain || 0) >= 0;
+
+        const grossClass = grossPositive ? "positive" : "negative";
+        const realClass = realPositive ? "positive" : "negative";
+
+        const grossPrefix = (stock.gross_gain || 0) < 0 ? "-" : "+";
+        const realPrefix = (stock.real_gain || 0) < 0 ? "-" : "+";
+
+        const taxRatePct = (stock.tax_rate != null ? stock.tax_rate * 100 : (stock.tax_type === 'LTCG' ? 12 : 20)).toFixed(0);
+        const isStcg = (stock.tax_type || '').toUpperCase() === 'STCG' || (stock.days_held < (_currentTaxConfig.threshold_days || 365));
+
+        const taxBadge = isStcg
+            ? `<span class="tax-badge tax-badge-stcg" title="Short-Term Capital Gain (< 365 days): ${taxRatePct}% tax deduction on gain"><i class="fa-solid fa-hourglass-half"></i> STCG (${taxRatePct}%)</span>`
+            : `<span class="tax-badge tax-badge-ltcg" title="Long-Term Capital Gain (≥ 365 days): ${taxRatePct}% tax deduction on gain"><i class="fa-solid fa-calendar-check"></i> LTCG (${taxRatePct}%)</span>`;
+
+        const buyDateDisplay = formatDateStr(stock.buy_date);
+        const soldDateDisplay = formatDateStr(stock.sold_date);
+
+        // Required columns: Stock Name, Total Holding Period, Gross Gain, Real Gain (Net after Tax)
+        tr.innerHTML = `
+            <td class="text-center col-seq">${idx + 1}</td>
+            <td>
+                <div class="stock-name-cell">
+                    <strong>${stock.company_name || stock.stock_code}</strong>
+                    <div style="display: flex; gap: 0.4rem; align-items: center; margin-top: 0.15rem;">
+                        <span class="stock-code-pill">${stock.stock_code}</span>
+                        <span class="exchange-text">${stock.exchange || 'NSE'}</span>
+                        ${stock.tag ? `<span class="tag-pill" style="font-size: 0.7rem; padding: 1px 6px;">${stock.tag}</span>` : ''}
+                    </div>
+                </div>
+            </td>
+            <td class="text-center">
+                <div style="font-size: 0.85rem; font-weight: 500;">${soldDateDisplay}</div>
+                <div class="date-range-sub"><i class="fa-solid fa-cart-shopping" style="font-size: 0.7rem;"></i> Bought: ${buyDateDisplay}</div>
+            </td>
+            <td class="text-right">
+                <div style="font-weight: 600;">Qty: ${stock.quantity}</div>
+                <div class="prices-qty-sub">Buy: ₹${(stock.buying_price || 0).toFixed(2)} &bull; Sell: ₹${(stock.selling_price || 0).toFixed(2)}</div>
+            </td>
+            <td class="text-center">
+                <div class="holding-period-cell">
+                    <span class="holding-period-text">${stock.holding_period_formatted || '(0 Years, 0 Months, 0 Days)'}</span>
+                    <span class="badge-days"><i class="fa-solid fa-clock"></i> ${stock.days_held || 0} days</span>
+                </div>
+            </td>
+            <td class="text-center">
+                ${taxBadge}
+            </td>
+            <td class="text-right ${grossClass}">
+                <div style="font-weight: 700;">${grossPrefix}${fmtInr(stock.gross_gain || 0)}</div>
+                <div style="font-size: 0.78rem; margin-top: 0.15rem;">${stock.gross_gain_pct >= 0 ? '+' : ''}${(stock.gross_gain_pct || 0).toFixed(2)}%</div>
+            </td>
+            <td class="text-right ${realClass}" style="background: rgba(16, 185, 129, 0.04);">
+                <div class="real-gain-cell">
+                    <div style="font-weight: 700; font-size: 1.02rem;">${realPrefix}${fmtInr(stock.real_gain || 0)}</div>
+                    <div class="tax-deducted-sub">${stock.tax_deducted > 0 ? 'Tax: -₹' + (stock.tax_deducted || 0).toFixed(2) : 'No tax deduction'}</div>
+                </div>
+            </td>
+            <td class="text-center">
+                <div class="sold-actions-cell">
+                    <button class="btn-icon-action btn-restore" data-id="${stock.id}" data-symbol="${stock.symbol}" title="Restore stock back to active portfolio">
+                        <i class="fa-solid fa-arrow-rotate-left"></i>
+                    </button>
+                    <button class="btn-icon-action btn-delete-perm" data-id="${stock.id}" data-symbol="${stock.symbol}" title="Permanently delete from history">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+
+        // Wire action buttons
+        const btnRestore = tr.querySelector(".btn-restore");
+        if (btnRestore) {
+            btnRestore.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const id = btnRestore.getAttribute("data-id");
+                const sym = btnRestore.getAttribute("data-symbol");
+                if (confirm(`Restore '${sym}' back to your active portfolio?`)) {
+                    await handleRestoreSoldStock(id, sym);
+                }
+            });
+        }
+
+        const btnDel = tr.querySelector(".btn-delete-perm");
+        if (btnDel) {
+            btnDel.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const id = btnDel.getAttribute("data-id");
+                const sym = btnDel.getAttribute("data-symbol");
+                if (confirm(`Permanently remove '${sym}' historical record? This cannot be undone.`)) {
+                    await handlePermanentDeleteSoldStock(id, sym);
+                }
+            });
+        }
+
+        tbody.appendChild(tr);
+    });
+}
+
+async function handleRestoreSoldStock(itemId, symbol) {
+    try {
+        const response = await fetch(`/api/stocks/history/sold/${encodeURIComponent(itemId)}/restore`, {
+            method: "POST"
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Failed to restore stock");
+        }
+        showToast(`Restored ${symbol} to active portfolio`, "success");
+        fetchAndRenderStocks();
+        fetchAndRenderSoldStocks();
+    } catch (err) {
+        showToast("Error restoring stock: " + err.message, "error");
+    }
+}
+
+async function handlePermanentDeleteSoldStock(itemId, symbol) {
+    try {
+        const response = await fetch(`/api/stocks/history/sold/${encodeURIComponent(itemId)}`, {
+            method: "DELETE"
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Failed to delete record");
+        }
+        showToast(`Permanently deleted ${symbol} historical record`, "success");
+        fetchAndRenderSoldStocks();
+    } catch (err) {
+        showToast("Error deleting record: " + err.message, "error");
+    }
+}
+
